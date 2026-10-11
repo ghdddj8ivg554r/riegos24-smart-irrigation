@@ -4,6 +4,20 @@ import 'dotenv/config';
 import crypto from 'node:crypto';
 
 const app = express();
+
+const API_ACCESS_KEY = process.env.API_ACCESS_KEY || '';
+
+app.use((req, res, next) => {
+  if (req.path === '/api/health') return next();
+
+  const key = req.headers['x-api-key'];
+  if (!API_ACCESS_KEY || key !== API_ACCESS_KEY) {
+    return res.status(401).json({ ok: false, error: 'No autorizado' });
+  }
+
+  next();
+});
+
 app.use(express.json({ limit: '32kb' }));
 const port = Number(process.env.PORT || 3000);
 const baseUrl = (process.env.TUYA_BASE_URL || 'https://openapi.tuyaus.com').replace(/\/$/, '');
