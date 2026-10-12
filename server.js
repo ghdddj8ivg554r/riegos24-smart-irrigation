@@ -280,7 +280,7 @@ const body = {
 
 const data = await authed(
   'POST',
-  `/v1.0/iot-03/devices/${encodeURIComponent(deviceId)}/commands`,
+  `/v1.0/iot-03/devices/${encodeURIComponent(deviceId)}/commands`
   body
 );
 
