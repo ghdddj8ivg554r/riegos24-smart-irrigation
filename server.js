@@ -9,7 +9,7 @@ const port = Number(process.env.PORT || 3000);
 const API_ACCESS_KEY = process.env.API_ACCESS_KEY || '';
 const baseUrl = (
 process.env.TUYA_BASE_URL || 'https://openapi.tuyaus.com'
-).replace(//$/, '');
+).replace(/\/$/, '');
 const deviceId = process.env.TUYA_DEVICE_ID || '';
 
 const zones = {
@@ -60,7 +60,7 @@ const missing = [
 
 if (missing.length) {
 const error = new Error(
-"Falta configurar: ${missing.join(', ')}"
+  `Falta configurar: ${missing.join(', ')}`
 );
 error.status = 503;
 throw error;
@@ -93,11 +93,11 @@ const bodyText = body === undefined ? '' : JSON.stringify(body);
 const contentHash = sha256(bodyText);
 
 const stringToSign =
-"${method.toUpperCase()}\n${contentHash}\n\n${path}";
+  `${method.toUpperCase()}\n${contentHash}\n\n${path}`;
 
 const signText = accessToken
-? "${process.env.TUYA_ACCESS_ID}${accessToken}${timestamp}${requestNonce}${stringToSign}"
-: "${process.env.TUYA_ACCESS_ID}${timestamp}${requestNonce}${stringToSign}";
+  ? `${process.env.TUYA_ACCESS_ID}${accessToken}${timestamp}${requestNonce}${stringToSign}`
+  : `${process.env.TUYA_ACCESS_ID}${timestamp}${requestNonce}${stringToSign}`;
 
 const headers = {
 client_id: process.env.TUYA_ACCESS_ID,
@@ -115,7 +115,7 @@ if (body !== undefined) {
 headers['Content-Type'] = 'application/json';
 }
 
-const response = await fetch("${baseUrl}${path}", {
+const response = await fetch(`${baseUrl}${path}`, {
 method: method.toUpperCase(),
 headers,
 body: body === undefined ? undefined : bodyText,
@@ -125,7 +125,7 @@ const data = await response.json().catch(() => ({}));
 
 if (!response.ok || data.success === false) {
 const error = new Error(
-data.msg || "Tuya respondió HTTP ${response.status}"
+  data.msg || `Tuya respondió HTTP ${response.status}`
 );
 
 error.status = 502;
@@ -226,7 +226,7 @@ app.get('/api/device/status', async (_req, res, next) => {
 try {
 const data = await authed(
 'GET',
-"/v1.0/iot-03/devices/${encodeURIComponent(deviceId)}/status"
+`/v1.0/iot-03/devices/${encodeURIComponent(deviceId)}/status`
 );
 
 res.json({
@@ -308,5 +308,4 @@ error: error.message || 'Error interno',
 });
 
 app.listen(port, () => {
-console.log("Riegos24 API escuchando en puerto ${port}");
-});
+console.log(`Riegos24 API escuchando en puerto ${port}`);
