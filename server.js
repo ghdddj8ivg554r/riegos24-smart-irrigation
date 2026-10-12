@@ -301,11 +301,12 @@ app.use((error, _req, res, _next) => {
 const status = Number(error.status) || 500;
 
 res.status(status).json({
-ok: false,
+ok: false, 
 error: error.message || 'Error interno',
 ...(error.details ? { details: error.details } : {}),
 });
 });
 
 app.listen(port, () => {
-console.log(`Riegos24 API escuchando en puerto ${port}`);
+  console.log(`Riegos24 API escuchando en puerto ${port}`);
+});
