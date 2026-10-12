@@ -1,173 +1,84 @@
-<!DOCTYPE html>
-<html lang="es"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#102019">
 <title>Riegos24 Smart Irrigation</title>
-<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800&display=swap" rel="stylesheet">
 <style>
-:root{--g:#2e9e5b;--gd:#1b6b3e;--bg:#f3f6f4;--c:#fff;--t:#17261d;--m:#5f6f65;--bd:#e1e8e3;--gl:#e4f2ea;--w:#3d95cc;--wl:#dcecf7;--al:#e8590c;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1612;--c:#16211b;--t:#e8f0ea;--m:#98ac9f;--bd:#27352c;--gl:#1d3a2a;--g:#4cc27d;--wl:#1a3342;--w:#5db4ea}}
-:root[data-theme="dark"]{--bg:#0e1612;--c:#16211b;--t:#e8f0ea;--m:#98ac9f;--bd:#27352c;--gl:#1d3a2a;--g:#4cc27d;--wl:#1a3342;--w:#5db4ea}
-*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
-body{margin:0;background:var(--bg);color:var(--t);font:15px/1.45 Nunito,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--c);border-bottom:1px solid var(--bd);padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px}
-header b{color:var(--g);font-size:17px;font-weight:800}
-main{max-width:640px;margin:0 auto;padding:12px 12px 96px}
-.card{background:var(--c);border:1px solid var(--bd);border-radius:16px;padding:14px;margin-bottom:12px}
-.row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:7px 0;flex-wrap:wrap}
-.m{color:var(--m);font-size:13px}.hero{display:flex;gap:14px;align-items:center}.col{display:flex;flex-direction:column;gap:7px;align-items:flex-start}
-.btn{border:0;border-radius:12px;padding:12px 14px;font:inherit;font-weight:700;background:var(--gd);color:#fff;flex:1;min-height:46px;cursor:pointer}
-.btn.o{background:var(--gl);color:var(--t)}.btn.al{background:var(--al);color:#fff}.btn.w{width:100%}
-.chip{display:inline-block;border:1px solid var(--bd);border-radius:99px;padding:5px 12px;font:inherit;font-size:13px;background:var(--bg);color:var(--t);min-height:34px;cursor:pointer}
-span.chip,div.chip{cursor:default;min-height:0}
-.chip.on,.chip.ok{background:var(--gd);color:#fff;border-color:var(--gd)}.chip.al{background:var(--al);color:#fff;border-color:var(--al)}
-.in{border:1px solid var(--bd);border-radius:10px;padding:9px;background:var(--bg);color:var(--t);font:inherit}.in.w{width:100%}.in.s{width:72px}
-label{display:block;margin:9px 0;font-size:13px;color:var(--m)}label .in{display:block;margin-top:3px}
-.days{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
-.step{display:flex;align-items:center;gap:10px}.step button{width:42px;height:42px;border-radius:50%;border:1px solid var(--bd);background:var(--bg);color:var(--t);font-size:20px;cursor:pointer}
-.cd{font-variant-numeric:tabular-nums;color:var(--w);font-size:22px}
-nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--c);border-top:1px solid var(--bd);padding-bottom:env(safe-area-inset-bottom,0px);z-index:6}
-nav button{flex:1;border:0;background:none;color:var(--m);padding:9px 2px;font:inherit;font-size:12px;cursor:pointer}nav button.on{color:var(--g);font-weight:800}
-.mod{position:fixed;inset:0;background:#0009;display:flex;align-items:center;justify-content:center;padding:14px;z-index:9;overflow:auto}.mod .card{width:100%;max-width:420px;margin:0}
-#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--gd);color:#fff;padding:10px 14px;border-radius:12px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:20;max-width:90%;text-align:center}
-.warn{border-color:var(--al)}.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}
-.log{border-top:1px solid var(--bd);padding:7px 0}.rec{border-top:1px solid var(--bd);padding:9px 0}
-.bars,.strip{display:flex;gap:6px;text-align:center;font-size:12px;color:var(--m);margin:8px 0}.bars{align-items:flex-end}.bars div,.strip div{flex:1}.bars i{display:block;background:var(--w);border-radius:4px 4px 0 0;min-height:2px}
-ul{margin:6px 0;padding-left:18px}
-</style></head><body>
-<header><b>💧 Riegos24 Smart Irrigation</b><span class="m" style="text-align:right">Controlador: <span id="connLabel">sin conectar</span><br><span id="clk"></span></span></header>
-<main id="app"></main><div id="toast"></div>
-<nav><button data-a="nav" data-k="home">🏠<br>Inicio</button><button data-a="nav" data-k="prog">📅<br>Programas</button><button data-a="nav" data-k="wx">☁️<br>Clima e IA</button><button data-a="nav" data-k="hist">📋<br>Historial</button><button data-a="nav" data-k="set">⚙️<br>Ajustes</button></nav>
+:root{--bg:#0b1510;--panel:#14231b;--panel2:#192c22;--line:#2b4435;--green:#55c889;--text:#eef7f0;--muted:#a9bcb0;--red:#f18c83;--amber:#f0c46c}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding-bottom:92px}
+header{position:sticky;top:0;z-index:5;background:#14231bf5;border-bottom:1px solid var(--line);padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.brand{font-weight:800;color:var(--green);font-size:20px}.status{font-size:12px;color:var(--muted);text-align:right}
+main{max-width:760px;margin:auto;padding:14px}.card{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:15px;margin:0 0 12px}
+h2{font-size:19px;margin:3px 0 12px}h3{font-size:16px;margin:0 0 9px}.muted,.small{color:var(--muted)}.small{font-size:12px}.row{display:flex;align-items:center;justify-content:space-between;gap:9px;flex-wrap:wrap}.row>*{min-width:0}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stat{background:var(--panel2);border-radius:12px;padding:12px}.stat strong{display:block;font-size:20px;margin-top:4px}
+button,input,select{font:inherit}button{border:0;border-radius:10px;padding:11px 13px;background:var(--green);color:#092015;font-weight:750;cursor:pointer}button.secondary{background:#263b2e;color:var(--text);border:1px solid var(--line)}button.danger{background:#5a2927;color:#ffe7e4}button:disabled{opacity:.45}
+input,select{background:#0d1912;color:var(--text);border:1px solid #365342;border-radius:9px;padding:10px;width:100%;margin-top:5px}
+label{display:block;margin:12px 0}.zone{display:flex;flex-direction:column;gap:10px}.chip{display:inline-block;border:1px solid var(--line);border-radius:20px;padding:5px 9px;font-size:12px;color:var(--muted)}.chip.ok{color:#7de3a8;border-color:#37764f}.chip.err{color:#ffaaa1;border-color:#85413b}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{flex:1}
+nav{position:fixed;bottom:0;left:0;right:0;z-index:10;display:grid;grid-template-columns:repeat(5,1fr);background:#14231bf7;border-top:1px solid var(--line);padding:7px 3px calc(7px + env(safe-area-inset-bottom))}
+nav button{background:transparent;color:var(--muted);padding:7px 2px;font-size:11px;font-weight:600;border-radius:8px}nav button span{display:block;font-size:20px;margin-bottom:2px}nav button.active{color:var(--green);background:#20372a}
+.hidden{display:none!important}.notice{padding:10px;border-radius:10px;background:#3b3020;color:#ffdda0;margin:10px 0}.okbox{background:#183d2a;color:#b9f2cd;padding:10px;border-radius:10px;margin:10px 0}
+hr{border:0;border-top:1px solid var(--line);margin:14px 0}.program{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}.days{display:flex;gap:5px;flex-wrap:wrap}.days button{padding:7px 9px;font-size:12px;background:#263b2e;color:var(--muted)}.days button.sel{background:var(--green);color:#092015}
+.log{border-top:1px solid var(--line);padding:10px 0}.log:first-of-type{border-top:0}.wide{width:100%}
+</style>
+</head>
+<body>
+<header><div class="brand">💧 Riegos24 Smart Irrigation</div><div id="topStatus" class="status">Controlador: sin verificar</div></header>
+<main>
+<section id="page-home">
+<div class="card"><div class="row"><h2>Estado del sistema</h2><span id="apiBadge" class="chip">Sin verificar</span></div><div class="grid"><div class="stat"><span class="muted">Zonas regando</span><strong id="activeCount">0 / 2</strong></div><div class="stat"><span class="muted">Modo</span><strong id="modeSummary">Inteligente</strong></div></div><p id="homeMessage" class="muted">Conectá la API desde Ajustes para consultar el controlador.</p><div class="actions"><button class="secondary" id="refreshHome">Actualizar estado</button><button class="danger" id="stopAll">Detener todas</button></div></div>
+<div id="zones" class="zone"></div>
+<div class="card"><h3>Clima real e IA</h3><div class="grid"><div class="stat">🌡️ Temperatura<strong id="tempOut">26 °C</strong></div><div class="stat">🌧️ Lluvia prevista<strong id="rainOut">20 %</strong></div><div class="stat">💨 Viento<strong id="windOut">12 km/h</strong></div><div class="stat">💧 Ahorro estimado<strong>No medido</strong></div></div><p class="small">Los datos climáticos son demostrativos, no provienen de una estación meteorológica ni de un servicio en tiempo real.</p></div>
+</section>
+<section id="page-prog" class="hidden"><div class="card"><h2>Programas de riego</h2><p class="muted">Podés configurar días, hora y duración por zona. En esta versión, los horarios se ejecutan solo mientras la página permanece abierta.</p><div class="notice">No actives horarios automáticos hasta verificar el controlador y las zonas.</div><div id="programList"></div><button id="addProgram" class="wide">＋ Nuevo programa</button><button id="savePrograms" class="wide secondary" style="margin-top:8px">Guardar en este dispositivo</button></div></section>
+<section id="page-weather" class="hidden"><div class="card"><h2>☁️ Clima e IA</h2><span id="weatherBadge" class="chip">Consultando clima real…</span><div class="grid"><div class="stat">🌡️ Temperatura<strong id="wxTemp">—</strong></div><div class="stat">💧 Lluvia actual<strong id="wxRainNow">—</strong></div><div class="stat">🌧️ Prob. lluvia próximas horas<strong id="wxRainProb">—</strong></div><div class="stat">💨 Viento<strong id="wxWind">—</strong></div></div><p id="wxUpdated" class="small">Ubicación meteorológica: Paso de la Patria, Corrientes.</p><button id="refreshWeather" class="secondary wide">Actualizar clima real</button><div id="weatherExplanation" class="okbox">Consultando pronóstico real…</div><h3>Reglas inteligentes</h3><label>Lluvia prevista para posponer (mm)<input id="rainLimit" type="number" min="0" max="50" step="0.5" value="2"></label><label>Viento máximo para regar (km/h)<input id="windLimit" type="number" min="1" max="100" value="35"></label><p class="muted">La decisión usa el pronóstico meteorológico. No sustituye sensores de humedad del suelo ni de caudal.</p></div></section>
+<section id="page-history" class="hidden"><div class="card"><div class="row"><h2>📋 Historial</h2><button id="exportCsv" class="secondary">Exportar CSV</button></div><div id="historyList"><p class="muted">Todavía no hay eventos registrados.</p></div><button id="clearHistory" class="secondary wide">Borrar historial local</button></div></section>
+<section id="page-settings" class="hidden"><div class="card"><h2>⚙️ Conexión con el controlador</h2><p class="muted">Ingresá la API_ACCESS_KEY que configuraste en Render. No es la clave secreta de Tuya. Se guarda solo en la sesión actual del navegador.</p><label>Clave API del backend<input id="apiKey" type="password" autocomplete="off" placeholder="Pegá aquí tu API_ACCESS_KEY"></label><div class="actions"><button id="connect">Guardar y comprobar</button><button id="forget" class="secondary">Quitar clave</button></div><div id="settingsMessage" class="muted" style="margin-top:10px">Sin comprobar.</div><hr><button id="refreshSettings" class="secondary wide">Consultar estado del dispositivo</button></div>
+<div class="card"><h2>Configuración de riego</h2><label>Modo<select id="mode"><option value="smart">Inteligente (clima real)</option><option value="sched">Programado</option><option value="manual">Manual</option><option value="vac">Vacaciones</option></select></label><label>Máximo por sesión (minutos)<input id="maxMinutes" type="number" min="1" max="240" value="60"></label><p class="small">Los programas y ajustes se guardan en este dispositivo. La automatización no es autónoma del servidor.</p></div>
+<div class="card"><h2>Zonas configuradas en el servidor</h2><p>Zona 1: Patio delantero · Código de dispositivo configurado en Render.</p><p>Zona 2: Patio trasero · Código de dispositivo configurado en Render.</p><p class="small">No cambies los códigos de los relés sin verificar el mapeo de Tuya.</p></div></section>
+</main>
+<nav>
+<button class="active" data-page="home"><span>🏠</span>Inicio</button><button data-page="prog"><span>📅</span>Programas</button><button data-page="weather"><span>☁️</span>Clima e IA</button><button data-page="history"><span>📋</span>Historial</button><button data-page="settings"><span>⚙️</span>Ajustes</button>
+</nav>
 <script>
-const $=i=>document.getElementById(i),pad=n=>String(n).padStart(2,'0'),esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])),DAYS=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-let OFF=-3*36e5,T=Date.now(),last=T,tab='home',paused=false,online=true,cf=0,edit=null,ovr=false,csv='',Q=[],LOG=[],dm={},tt;
-const fired=new Set(),dis=new Set(),ST={base:0,used:0,liters:0,sk:0},S={mode:'smart',speed:60,seq:true,armed:false,max:90,rain:5,wind:35,scn:'sol',a:{fc:1,recent:1,temp:1,wind:1}};
-const KC={'Césped':.8,'Jardín':.7,'Árboles':.6,'Huerta':1},EF={'Aspersores':.75,'Microaspersión':.85,'Goteo':.9};
-const DEV={n:'Relé Wi-Fi 2 canales (simulado)',cat:'kg',dps:[['switch_1','bool','ON/OFF'],['switch_2','bool','ON/OFF'],['countdown_1','value','temporizador nativo'],['countdown_2','value','temporizador nativo']]};
-const Z=[{id:1,name:'Patio delantero',ic:'🌿',veg:'Césped',m2:40,type:'Aspersores',max:30,lpm:25,dp:'switch_1',sel:15},{id:2,name:'Patio trasero',ic:'🌳',veg:'Césped',m2:60,type:'Aspersores',max:40,lpm:30,dp:'switch_2',sel:20}];
-let P=[{id:1,name:'Programa A · Jardín delantero',z:{1:15},days:[1,3,5],time:'06:00',on:true},{id:2,name:'Programa B · Jardín trasero',z:{2:20},days:[2,4,6],time:'06:30',on:true}];
-const R={};Z.forEach(z=>R[z.id]={st:'off',want:'off',left:0,tot:0,src:''});
-const SC={sol:{n:'Soleado templado',t:24,h:50,pop:10,fc:.2,rec:0,w:10},calor:{n:'Calor intenso',t:34,h:30,pop:0,fc:0,rec:0,w:12},lluvia:{n:'Lluvia prevista',t:19,h:85,pop:85,fc:12,rec:0,w:18},prob:{n:'Probabilidad alta, poca lluvia',t:22,h:70,pop:80,fc:.8,rec:0,w:10},viento:{n:'Viento fuerte',t:25,h:40,pop:5,fc:0,rec:0,w:45},recien:{n:'Llovió ayer',t:20,h:75,pop:20,fc:0,rec:9,w:8},fresco:{n:'Fresco',t:12,h:65,pop:10,fc:0,rec:0,w:8}};
-const W=()=>SC[S.scn],loc=t=>new Date(t+OFF),fmt=t=>pad(loc(t).getUTCHours())+':'+pad(loc(t).getUTCMinutes()),fmtD=t=>DAYS[loc(t).getUTCDay()]+' '+pad(loc(t).getUTCDate())+'/'+pad(loc(t).getUTCMonth()+1),mmss=s=>pad(Math.floor(s/60))+':'+pad(Math.floor(s%60)),dur=ms=>{const m=Math.max(1,Math.round(ms/6e4));return m>=60?Math.floor(m/60)+' h '+m%60+' min':m+' min'};
-const RING='<svg viewBox="0 0 120 120" width="132" height="132"><circle cx="60" cy="60" r="54" fill="none" stroke="var(--wl)" stroke-width="10"/><circle id="ring" cx="60" cy="60" r="54" fill="none" stroke="var(--w)" stroke-width="10" stroke-linecap="round" stroke-dasharray="339.3" stroke-dashoffset="339.3" transform="rotate(-90 60 60)"/><text id="rt" x="60" y="62" text-anchor="middle" font-size="21" font-weight="800" fill="currentColor"></text><text id="rs" x="60" y="80" text-anchor="middle" font-size="8.5" fill="var(--m)"></text></svg>';
-function log(z,ev,det){LOG.unshift({t:T,z:z?z.name:'Sistema',ev,det:det||''});if(LOG.length>200)LOG.pop()}
-function toast(m){const e=$('toast');e.textContent=m;e.style.opacity=1;clearTimeout(tt);tt=setTimeout(()=>e.style.opacity=0,3500)}
-/* Adaptador API: comandos enviados al backend; el estado solo se confirma leyendo Tuya. */
+'use strict';
 const API_BASE='https://riegos24-smart-irrigation.onrender.com';
-let apiKey=sessionStorage.getItem('riegos24_api_key')||'',apiConnected=false;
-function apiHeaders(){return {'Content-Type':'application/json','x-api-key':apiKey}}
-async function refreshDeviceStatus(showMsg=true){
-  if(!apiKey){apiConnected=false;if(showMsg)toast('Ingresá la clave API en Ajustes');return false}
-  try{
-    const res=await fetch(API_BASE+'/api/device/status',{headers:apiHeaders()});
-    const data=await res.json().catch(()=>({}));
-    if(!res.ok||!data.ok)throw new Error(data.error||'No se pudo leer el dispositivo');
-    const vals=Array.isArray(data.result)?data.result:(data.result?.status||[]);
-    Z.forEach(z=>{
-      const item=vals.find(v=>v.code===z.dp);
-      R[z.id].st=!item?'unknown':item.value===true?'on':item.value===false?'off':'unknown';
-    });
-    apiConnected=true;
-    const el=$('connLabel');if(el)el.textContent='conectado';
-    const msg=$('apiMsg');if(msg)msg.textContent='Estado consultado a Tuya. Revisá que los códigos DP coincidan con tu relé.';
-    if(showMsg)toast('Estado actualizado desde el dispositivo');
-    return true;
-  }catch(e){
-    apiConnected=false;const el=$('connLabel');if(el)el.textContent='error de conexión';
-    const msg=$('apiMsg');if(msg)msg.textContent='Error: '+e.message;
-    if(showMsg)toast('No se pudo confirmar el estado: '+e.message);
-    return false;
-  }
-}
-async function cmd(z,on){
-  const r=R[z.id],o=on?'ON':'OFF';
-  if(!apiKey){r.st='unknown';log(z,'Orden no enviada','Ingresá la clave API en Ajustes');toast('Conectá Riegos24 desde Ajustes antes de operar');render();return}
-  try{
-    const res=await fetch(API_BASE+'/api/zones/'+z.id+'/command',{
-      method:'POST',headers:apiHeaders(),
-      body:JSON.stringify(on?{on:true,confirm:'I_CONFIRM_WATERING'}:{on:false})
-    });
-    const data=await res.json().catch(()=>({}));
-    if(!res.ok||!data.ok)throw new Error(data.error||'El backend rechazó la orden');
-    log(z,'Orden '+o+' aceptada por el backend',z.dp+' · falta confirmar estado físico');
-    r.st='unknown';
-    const msg=$('apiMsg');if(msg)msg.textContent='Orden '+o+' aceptada por el backend; consultando estado real…';
-    setTimeout(()=>refreshDeviceStatus(false).then(()=>render()),800);
-  }catch(e){
-    r.st='unknown';log(z,'Error al enviar '+o,e.message);toast('Error de control: '+e.message);
-    const msg=$('apiMsg');if(msg)msg.textContent='Error: '+e.message;
-    render();
-  }
-}
-function decide(){const w=W(),why=[];let f=1,skip=false;
-if(S.mode==='manual')why.push('Modo manual: no hay riegos automáticos.');
-else if(S.mode==='sched')why.push('Modo programado: se usa la duración fijada, sin ajustes climáticos.');
-else if(S.mode==='vac'){f=.6;why.push('Modo vacaciones: duración reducida al 60 %.')}
-else{
-if(S.a.fc&&w.fc>=S.rain){skip=true;why.push(`Se pronostican ${w.fc} mm (umbral ${S.rain} mm): se pospone el riego.`)}
-else if(S.a.fc&&w.pop>=60)why.push(`Probabilidad de lluvia ${w.pop} %, pero solo ${w.fc} mm previstos: no se cancela.`);
-if(S.a.recent&&w.rec>=S.rain){skip=true;why.push(`Llovieron ${w.rec} mm recientemente: se cancela la sesión.`)}
-if(S.a.wind&&w.w>=S.wind){skip=true;why.push(`Viento de ${w.w} km/h: se pospone.`)}
-if(!skip&&S.a.temp&&w.t>=30){f=1.2;why.push(`Calor (${w.t} °C): +20 % dentro del máximo de cada zona.`)}
-else if(!skip&&S.a.temp&&w.t<=15){f=.8;why.push(`Fresco (${w.t} °C): −20 % de duración.`)}}
-if(!why.length)why.push('Sin ajustes: se usa la duración programada.');
-return{f,skip,why}}
-function enqueue(z,sec,src){const r=R[z.id],tot=Q.reduce((a,q)=>a+q.sec,0)+Z.reduce((a,x)=>a+R[x.id].left,0);
-if(r.want==='on'||Q.some(q=>q.z===z.id)){log(z,'Ejecución duplicada bloqueada',src);toast('Esa zona ya está regando o en cola');return}
-sec=Math.min(sec,z.max*60);
-if(tot+sec>S.max*60){log(z,'Límite de sesión superado: no se programa',S.max+' min máx.');toast('Se superaría el tiempo máximo por sesión');return}
-Q.push({z:z.id,sec,src});next()}
-function next(){if(paused)return;
-while(Q.length){if(S.seq&&Z.some(x=>R[x.id].want==='on'))return;
-const q=Q.shift(),z=Z.find(x=>x.id===q.z),r=R[z.id];
-if(!online){log(z,'Riego no iniciado','Sin conexión con el relé: no se envió ninguna orden');continue}
-r.want='on';r.left=r.tot=q.sec;r.src=q.src;log(z,'Riego iniciado',Math.round(q.sec/60)+' min · '+q.src);cmd(z,true)}}
-function runProg(p,force){const dd=force||ovr?{f:1,skip:false,why:[force?'Ejecución manual: sin ajustes climáticos.':'Decisión climática anulada manualmente.']}:decide();
-Object.keys(p.z).forEach(id=>{const z=Z.find(x=>x.id==id),min=p.z[id];if(!z||!min)return;
-if(!force)ST.base+=min;
-if(dd.skip){ST.sk++;log(z,'Riego cancelado o pospuesto por clima',dd.why.join(' '));return}
-const m=Math.min(Math.round(min*dd.f),z.max);if(!force)ST.used+=m;
-if(dd.f!==1)log(z,'Decisión climática',dd.why.join(' ')+' ('+min+' a '+m+' min)');
-enqueue(z,m*60,p.name.split(' · ')[0]+(force?' (manual)':' (auto)'))})}
-function nextRun(zid){let b=null;if(!S.armed||S.mode==='manual')return null;const t=loc(T);
-for(let k=0;k<8;k++){const day=new Date(Date.UTC(t.getUTCFullYear(),t.getUTCMonth(),t.getUTCDate()+k));
-P.forEach(p=>{if(!p.on||!p.days.includes(day.getUTCDay())||(zid&&!p.z[zid]))return;const[h,m]=p.time.split(':').map(Number),f=day.getTime()+(h*60+m)*6e4-OFF;if(f>T&&(!b||f<b.f))b={f,p}})}
-return b}
-function tick(){last=T;T+=500*S.speed;const dt=500*S.speed/1e3,d=Math.floor((T+OFF)/864e5);
-if(S.armed&&S.mode!=='manual'&&!paused){const wd=loc(T).getUTCDay();
-P.forEach(p=>{if(!p.on||!p.days.includes(wd))return;const[h,m]=p.time.split(':').map(Number),f=d*864e5+(h*60+m)*6e4-OFF,k=p.id+'-'+d;
-if(last<f&&f<=T&&!fired.has(k)){fired.add(k);runProg(p);render()}})}
-if(!paused)Z.forEach(z=>{const r=R[z.id];if(r.want!=='on')return;r.left-=dt;
-if(r.left<=0){r.want='off';r.left=0;ST.liters+=r.tot/60*z.lpm;dm[d]=(dm[d]||0)+r.tot/60;log(z,'Riego finalizado',Math.round(r.tot/60)+' min · apagado automático');cmd(z,false);next();render()}})}
-function pause(){paused=!paused;Z.forEach(z=>{if(R[z.id].want==='on')cmd(z,!paused)});log(null,paused?'Riego en pausa (válvulas cerradas)':'Riego reanudado');if(!paused)next()}
-function stop(){Q=[];paused=false;Z.forEach(z=>{const r=R[z.id];r.want='off';r.left=0;cmd(z,false)});log(null,'PARADA DE EMERGENCIA','Orden OFF a todas las zonas; cola vaciada')}
-function setOnline(v){online=v;log(null,v?'Conexión recuperada':'Conexión perdida (simulada)');
-Z.forEach(z=>{const r=R[z.id];if(!v){if(r.st==='on'||r.want==='on')r.st='unknown'}else if(r.want==='off'&&r.st!=='off')cmd(z,false);else if(r.want==='on'&&r.st==='unknown')cmd(z,true)})}
-const need=z=>Math.max(1,2+.15*(W().t-10))*KC[z.veg]*z.m2*7/EF[z.type],sched=z=>P.filter(p=>p.on&&p.z[z.id]).reduce((a,p)=>a+p.z[z.id]*z.lpm*p.days.length,0);
-function ai(){const L=[];
-Z.forEach(z=>{const n=need(z),s=sched(z),r=s/n;if(!s||dis.has(z.id+S.scn)||(r<=1.3&&r>=.6))return;
-L.push(`<div class="rec"><b>${z.ic} ${esc(z.name)}</b>: ${r>1.3?'duración excesiva':'riego insuficiente'} para los parámetros configurados. Programado ≈ ${Math.round(s)} L/semana (con ${z.lpm} L/min) frente a una necesidad estimada de ≈ ${Math.round(n)} L/semana (ET₀ simplificada × Kc ${KC[z.veg]} ÷ eficiencia ${EF[z.type]}; no medido).<div class="row"><button class="btn" data-a="ia" data-i="${z.id}">Aceptar ajuste</button><button class="btn o" data-a="ir" data-i="${z.id}">Rechazar</button></div></div>`)});
-return `<div class="card"><b>🤖 Riegos24 AI</b>${L.join('')||'<div class="m">Sin recomendaciones: la programación es coherente con los parámetros de cada zona.</div>'}<div class="m">La IA solo propone y explica; toda orden pasa por las reglas de seguridad. No hay sensores de suelo ni caudalímetro.</div></div>`}
-const zc=z=>{const r=R[z.id],on=r.want==='on',qd=Q.some(q=>q.z===z.id),n=nextRun(z.id),s=r.st==='unknown'?'<span class="chip al">Desconocido</span>':r.st==='on'?'<span class="chip on">ON</span>':'<span class="chip">OFF</span>';
-return `<div class="card"><div class="row"><b>${z.ic} ${esc(z.name)}</b>${s}</div>
-<div class="m">${on?(r.src.includes('auto')?'Riego automático. ':'Riego manual. '):''}${qd?'En cola. ':''}Próximo: ${n?fmtD(n.f)+' '+fmt(n.f):'sin programar'}</div>
-<div class="row"><div class="step"><button data-a="dm" data-i="${z.id}">−</button><b>${z.sel} min</b><button data-a="dp" data-i="${z.id}">+</button></div><b class="cd" id="cd${z.id}"></b></div>
-<div class="row"><button class="btn ${on||qd?'al':''}" data-a="zt" data-i="${z.id}">${on?'Detener':qd?'Quitar de la cola':'Regar ahora'}</button><button class="btn o" data-a="ed" data-i="${z.id}">Editar</button></div></div>`};
-function home(){const a=Z.filter(z=>R[z.id].want==='on'),w=W(),d=decide(),n=nextRun(),
-sys=!online?['Desconectado','al']:!apiConnected?['Sin conexión real','al']:Z.some(z=>R[z.id].st==='unknown')?['Funcionamiento degradado','al']:['Conectado (API)','ok'],
-irr=a.length?(paused?'Pausado':'Regando'):S.armed&&S.mode==='smart'&&d.skip&&!ovr?'Pausado por lluvia o clima':n?'Programado':'Inactivo',
-sv=ST.base?Math.max(0,Math.round((1-ST.used/ST.base)*100)):null;
-return(S.armed?'':`<div class="card warn"><b>Riego automático desactivado</b><div class="m">Revisá zonas, programas y límites. Los programas no se ejecutan hasta que confirmes.</div><button class="btn w" data-a="arm">Confirmar y activar</button></div>`)+
-`<div class="card hero">${RING}<div class="col"><span class="chip ${sys[1]}">${sys[0]}</span><span class="chip ${a.length?'on':''}">${irr}</span><span class="m">Zonas activas: <b>${a.length}</b> de ${Z.length}</span><span class="m" id="nx"></span></div></div>
-<div class="row"><button class="btn" data-a="all">${cf?'¿Confirmar?':'▶ Iniciar todo'}</button><button class="btn o" data-a="pause">${paused?'▶ Reanudar':'⏸ Pausar'}</button><button class="btn al" data-a="stop">⛔ Detener</button></div>`+
-Z.map(zc).join('')+
-`<div class="card"><div class="row"><b>☁️ ${esc(w.n)}</b><span class="chip">Simulado</span></div><div class="m">${w.t} °C, ☔ ${w.pop} % (${w.fc} mm), 💨 ${w.w} km/h</div><div class="m">${esc(d.why[0])}</div></div>
-<div class="card"><b>💧 Ahorro estimado: ${sv===null?'sin datos aún':sv+' %'}</b><div class="m">Estimación frente al programa fijo sin ajustes; no es consumo medido (sin caudalímetro). Litros estimados con el caudal configurado: ${Math.round(ST.liters)} L.</div></div>`}
-const calIn=()=>'<b>Calendario semanal</b>'+[1,2,3,4,5,6,0].map(d=>{const L=P.filter(p=>p.on&&p.days.includes(d)).sort((a,b)=>a.time<b.time?-1:1).map(p=>`<span class="chip on">${p.time} ${esc(p.name.split(' · ')[0])}, ${Object.values(p.z).reduce((a,b)=>a+b,0)} min</span>`).join(' ');return `<div class="row"><span class="m">${DAYS[d]}</span><span>${L||'<span class="m">sin riego</span>'}</span></div>`}).join('');
-function progs(){return P.map(p=>`<div class="card"><div class="row"><input class="in" value="${esc(p.name)}" data-c="nm" data-i="${p.id}" style="flex:1"><button class="chip ${p.on?'on':''}" data-a="pt" data-i="${p.id}">${p.on?'Activo':'Desactivado'}</button></div>
-<div class="days">${[1,2,3,4,5,6,0].map(d=>`<button class="chip ${p.days.includes(d)?'on':''}" data-a="pd" data-i="${p.id}" data-d="${d}">${DAYS[d]}</button>`).join('')}</div>
-<label>Hora de inicio (24 h)<input type="time" class="in" value="${p.time}" data-c="tm" data-i="${p.id}"></label>
-${Z.map(z=>`<div class="row"><span>${z.ic} ${esc(z.name)}</span><span><input type="number" min="0" max="${z.max}" class="in s" value="${p.z[z.id]||0}" data-c="dz" data-i="${p.id}" data-z="${z.id}"> min</span></div>`).join('')}
-<div class="row"><button class="btn o" data-a="pr" data-i="${p.id}">Duplicar</button><button class="btn o" data-a="px" data-i="${p.id}">Eliminar</button><button class="btn" data-a="pe" data-i="${p.id}">Ejecutar ya</button></div></div>`).join('')+`<button class="btn w" data-a="pn" style="margin-bottom:12px">+ Nuevo programa</button><div class="card" id="cal">${calIn()}</div>`}
-function wx(){const w=W(),d=decide(),h=loc(T).getUTCHours();
-return `<div class="card"><div class="row"><b>Clima actual</b><span class="chip">Datos simulados</span></div>
-<label>Escenario de demostración<select class="in w" data-c="scn">${Object.keys(SC).map(k=>`<option value="${k}" ${k===S.scn?'selected':''}>${SC[k].n}</option>`).join
+const $=id=>document.getElementById(id);
+let apiKey=sessionStorage.getItem('riegos24_api_key')||'';
+let apiConnected=false, deviceStatus=null, history=load('r24_history',[]), nextProgramId=3, weather=null, lastScheduleKey='', scheduleRunning=false, autoEnabled=load('r24_auto',false), modeSaved=load('r24_mode','smart');
+let zones=load('r24_zones',[{id:1,name:'Patio delantero',on:false,minutes:10},{id:2,name:'Patio trasero',on:false,minutes:10}]);
+let programs=load('r24_programs',[{id:1,name:'Programa mañana',time:'07:00',days:[1,3,5],durations:{1:10,2:10},enabled:false},{id:2,name:'Programa tarde',time:'18:00',days:[2,4,6],durations:{1:8,2:8},enabled:false}]);
+const dayNames=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+function load(k,fallback){try{const v=localStorage.getItem(k);return v===null?fallback:JSON.parse(v)}catch{return fallback}}
+function save(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){console.warn('No se pudo guardar localmente',e)}}
+function log(event,detail=''){history.unshift({time:new Date().toLocaleString('es-AR'),event,detail});history=history.slice(0,200);save('r24_history',history);renderHistory()}
+function setMessage(msg,error=false){$('settingsMessage').textContent=msg;$('settingsMessage').style.color=error?'#ffaaa1':'#a9bcb0'}
+function navTo(page){document.querySelectorAll('main section').forEach(s=>s.classList.toggle('hidden',s.id!=='page-'+page));document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));}
+document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>navTo(b.dataset.page)));
+async function api(path,options={}){if(!apiKey)throw new Error('Falta la clave API. Ingresala en Ajustes.');const response=await fetch(API_BASE+path,{...options,headers:{'Content-Type':'application/json','x-api-key':apiKey,...(options.headers||{})}});const data=await response.json().catch(()=>({}));if(!response.ok||data.ok===false)throw new Error(data.error||('Error HTTP '+response.status));return data}
+async function refreshStatus(){try{const data=await api('/api/device/status');deviceStatus=data.result||[];apiConnected=true;$('apiBadge').textContent='API responde';$('apiBadge').className='chip ok';$('topStatus').textContent='API: autenticada';$('homeMessage').textContent='Respuesta recibida del backend. El estado real depende de los códigos de estado devueltos por Tuya.';setMessage('Backend autenticado; respuesta recibida. Revisar estados DP si no se identifica ON/OFF.');log('Consulta de estado','El backend respondió correctamente.');renderZones();return data}catch(e){apiConnected=false;$('apiBadge').textContent='Sin conectar';$('apiBadge').className='chip err';$('topStatus').textContent='Controlador: sin conectar';$('homeMessage').textContent=e.message;setMessage(e.message,true);return null}}
+async function commandZone(zone,on,preconfirmed=false){if(on&&!preconfirmed&&!confirm('Confirmá que esta zona corresponde al sector correcto y que es seguro abrir el agua. ¿Enviar orden de ENCENDIDO?'))return;try{await api('/api/zones/'+zone.id+'/command',{method:'POST',body:JSON.stringify({on, ...(on?{confirm:'I_CONFIRM_WATERING'}:{})})});zone.on=on;log(on?'Orden ON enviada':'Orden OFF enviada',zone.name);await refreshStatus();renderZones();return true}catch(e){setMessage('No se confirmó la orden: '+e.message,true);log('Error de comando',zone.name+': '+e.message);alert('No se pudo confirmar la orden: '+e.message);return false}}
+function renderZones(){$('activeCount').textContent=zones.filter(z=>z.on).length+' / '+zones.length;$('modeSummary').textContent=$('mode').selectedOptions[0]?.textContent.split(' (')[0]||'Inteligente';$('zones').innerHTML=zones.map(z=>`<div class="card"><div class="row"><h3>💧 ${z.name}</h3><span class="chip ${z.on?'ok':''}">${z.on?'ON solicitado':'Estado no confirmado'}</span></div><label>Duración manual (minutos)<input type="number" min="1" max="240" data-minutes="${z.id}" value="${z.minutes}"></label><div class="actions"><button data-command="${z.id}" data-on="true">Regar ahora</button><button class="danger" data-command="${z.id}" data-on="false">Apagar</button></div></div>`).join('');$('zones').querySelectorAll('[data-minutes]').forEach(i=>i.addEventListener('change',()=>{const z=zones.find(x=>x.id===+i.dataset.minutes);z.minutes=Math.max(1,Math.min(240,+i.value||10));save('r24_zones',zones)}));$('zones').querySelectorAll('[data-command]').forEach(b=>b.addEventListener('click',()=>{const z=zones.find(x=>x.id===+b.dataset.command);commandZone(z,b.dataset.on==='true')}))}
+function renderPrograms(){$('programList').innerHTML=programs.map(p=>`<div class="program"><div class="row"><input aria-label="Nombre del programa" data-pname="${p.id}" value="${escapeHtml(p.name)}" style="flex:1"><button class="secondary" data-toggle="${p.id}">${p.enabled?'Activo':'Desactivado'}</button></div><label>Hora de inicio<input type="time" data-ptime="${p.id}" value="${p.time}"></label><div class="days">${dayNames.map((d,i)=>`<button class="${p.days.includes(i)?'sel':''}" data-day="${i}" data-p="${p.id}">${d}</button>`).join('')}</div>${zones.map(z=>`<label>${z.name} · minutos<input type="number" min="0" max="240" data-duration="${p.id}" data-zone="${z.id}" value="${p.durations[z.id]||0}"></label>`).join('')}<button class="secondary" data-delete="${p.id}">Eliminar programa</button></div>`).join('')}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+$('programList').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const p=programs.find(x=>x.id===+(b.dataset.toggle||b.dataset.p||b.dataset.delete));if(b.dataset.toggle){p.enabled=!p.enabled;renderPrograms()}else if(b.dataset.day!==undefined){const d=+b.dataset.day;p.days=p.days.includes(d)?p.days.filter(x=>x!==d):p.days.concat(d);renderPrograms()}else if(b.dataset.delete){programs=programs.filter(x=>x.id!==+b.dataset.delete);renderPrograms()}save('r24_programs',programs)});
+$('programList').addEventListener('change',e=>{const el=e.target;if(el.dataset.pname){const p=programs.find(x=>x.id===+el.dataset.pname);if(p)p.name=el.value}if(el.dataset.ptime){const p=programs.find(x=>x.id===+el.dataset.ptime);if(p)p.time=el.value}if(el.dataset.duration){const p=programs.find(x=>x.id===+el.dataset.duration),z=+el.dataset.zone;if(p)p.durations[z]=Math.max(0,Math.min(240,+el.value||0))}save('r24_programs',programs)});
+$('addProgram').addEventListener('click',()=>{programs.push({id:nextProgramId++,name:'Nuevo programa',time:'07:00',days:[],durations:{1:0,2:0},enabled:false});save('r24_programs',programs);renderPrograms()});
+$('savePrograms').addEventListener('click',()=>{save('r24_programs',programs);log('Programas guardados','Guardados en el almacenamiento local de este navegador.');alert('Programas guardados en este dispositivo. Para ejecutarlos automáticamente, la página debe permanecer abierta.')});
+$('connect').addEventListener('click',async()=>{const val=$('apiKey').value.trim();if(!val){setMessage('Ingresá la clave API.',true);return}apiKey=val;sessionStorage.setItem('riegos24_api_key',apiKey);await refreshStatus()});
+$('forget').addEventListener('click',()=>{apiKey='';sessionStorage.removeItem('riegos24_api_key');apiConnected=false;$('apiKey').value='';$('apiBadge').textContent='Sin conectar';$('apiBadge').className='chip';$('topStatus').textContent='Controlador: sin conectar';setMessage('Clave quitada de esta sesión.');log('Clave API quitada')});
+$('refreshHome').addEventListener('click',refreshStatus);$('refreshSettings').addEventListener('click',refreshStatus);
+$('stopAll').addEventListener('click',async()=>{if(!confirm('¿Enviar órdenes OFF a ambas zonas?'))return;for(const z of zones){try{await api('/api/zones/'+z.id+'/command',{method:'POST',body:JSON.stringify({on:false})});z.on=false;log('Orden OFF enviada',z.name)}catch(e){log('Error al apagar',z.name+': '+e.message);alert('No se pudo confirmar el apagado de '+z.name+': '+e.message)}}renderZones()});
+async function refreshWeather(){const badge=$('weatherBadge');try{badge.textContent='Consultando…';const url='https://api.open-meteo.com/v1/forecast?latitude=-27.33&longitude=-58.57&current=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m&hourly=precipitation_probability,precipitation&daily=precipitation_sum&forecast_days=2&timezone=America%2FArgentina%2FCordoba';const res=await fetch(url);if(!res.ok)throw Error('Servicio meteorológico HTTP '+res.status);const d=await res.json();if(!d.current||!d.hourly)throw Error('Respuesta meteorológica incompleta');const now=new Date(),times=d.hourly.time.map(t=>new Date(t)),idx=Math.max(0,times.findIndex(t=>t>=now)),end=Math.min(idx+3,d.hourly.time.length-1);let prob=0,mm=0;for(let i=idx;i<=end;i++){prob=Math.max(prob,d.hourly.precipitation_probability?.[i]||0);mm+=(d.hourly.precipitation?.[i]||0)}weather={temp:d.current.temperature_2m,humidity:d.current.relative_humidity_2m,rainNow:d.current.precipitation,wind:d.current.wind_speed_10m,rainProb:prob,rain3h:mm,updated:new Date().toLocaleString('es-AR')};$('wxTemp').textContent=weather.temp+' °C';$('wxRainNow').textContent=weather.rainNow+' mm';$('wxRainProb').textContent=prob+' % · '+mm.toFixed(1)+' mm/3h';$('wxWind').textContent=weather.wind+' km/h';$('wxUpdated').textContent='Paso de la Patria, Corrientes · Actualizado '+weather.updated;badge.textContent='Clima real conectado';badge.className='chip ok';updateWeatherAdvice();save('r24_weather_cache',weather);return true}catch(e){weather=load('r24_weather_cache',null);badge.textContent=weather?'Clima guardado (sin actualizar)':'Clima sin conexión';badge.className='chip err';if(weather){$('wxTemp').textContent=weather.temp+' °C';$('wxRainNow').textContent=weather.rainNow+' mm';$('wxRainProb').textContent=weather.rainProb+' % · '+Number(weather.rain3h).toFixed(1)+' mm/3h';$('wxWind').textContent=weather.wind+' km/h';$('wxUpdated').textContent='Última lectura guardada: '+weather.updated} $('weatherExplanation').textContent='No se pudo actualizar el pronóstico: '+e.message+'. No se usarán datos inventados.';return false}}
+function updateWeatherAdvice(){if(!weather)return;const rainLimit=Math.max(0,+$('rainLimit').value||2),windLimit=Math.max(1,+$('windLimit').value||35);let msg='Condiciones sin bloqueo según los límites configurados.';if(weather.rain3h>=rainLimit&&rainLimit>0)msg='RECOMENDACIÓN: posponer riego; se pronostican '+weather.rain3h.toFixed(1)+' mm en las próximas horas (límite '+rainLimit+' mm).';else if(weather.wind>=windLimit)msg='RECOMENDACIÓN: posponer riego por viento de '+weather.wind+' km/h (límite '+windLimit+' km/h).';else if(weather.temp>=30)msg='Hace calor ('+weather.temp+' °C). Considerar un aumento moderado, sin superar los máximos de zona.';else msg='No se detecta lluvia o viento por encima de los límites configurados. Confirmá el estado del suelo antes de regar.';$('weatherExplanation').textContent=msg}
+$('refreshWeather').addEventListener('click',refreshWeather);$('rainLimit').value=load('r24_rain_limit',2);$('windLimit').value=load('r24_wind_limit',35);$('rainLimit').addEventListener('change',()=>{save('r24_rain_limit',+$('rainLimit').value);updateWeatherAdvice()});$('windLimit').addEventListener('change',()=>{save('r24_wind_limit',+$('windLimit').value);updateWeatherAdvice()});
+function renderHistory(){$('historyList').innerHTML=history.length?history.map(x=>`<div class="log"><strong>${escapeHtml(x.event)}</strong><div class="small">${escapeHtml(x.time)}</div><div class="muted">${escapeHtml(x.detail)}</div></div>`).join(''):'<p class="muted">Todavía no hay eventos registrados.</p>'}
+$('clearHistory').addEventListener('click',()=>{if(confirm('¿Borrar el historial local?')){history=[];renderHistory()}});
+$('exportCsv').addEventListener('click',()=>{const rows=[['Fecha','Evento','Detalle'],...history.map(x=>[x.time,x.event,x.detail])];const csv=rows.map(row=>row.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\r\n');const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='riegos24-historial.csv';a.click();URL.revokeObjectURL(url)});
+$('mode').value=modeSaved;$('mode').addEventListener('change',()=>{save('r24_mode',$('mode').value);renderZones()});$('autoEnabled').checked=!!autoEnabled;$('autoEnabled').addEventListener('change',()=>{autoEnabled=$('autoEnabled').checked;save('r24_auto',autoEnabled);log(autoEnabled?'Automatización habilitada':'Automatización deshabilitada','La página debe permanecer abierta.');if(autoEnabled&&!confirm('La automatización solo funciona mientras esta página permanece abierta. ¿Habilitarla?')){$('autoEnabled').checked=false;autoEnabled=false;save('r24_auto',false)}});
+nextProgramId=Math.max(2,...programs.map(p=>p.id))+1;if(apiKey){$('apiKey').value=apiKey;setMessage('Hay una clave guardada en esta sesión. Tocá Guardar y comprobar para verificarla.')}
+renderZones();renderPrograms();renderHistory();refreshWeather();setInterval(refreshWeather,15*60*1000);setInterval(async()=>{if(!autoEnabled||scheduleRunning)return;const now=new Date(),day=now.getDay(),hh=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0'),key=now.toDateString()+' '+hh;if(key===lastScheduleKey)return;const due=programs.filter(p=>p.enabled&&p.days.includes(day)&&p.time===hh);if(!due.length)return;lastScheduleKey=key;scheduleRunning=true;try{const weatherFresh=await refreshWeather();if(!weatherFresh){log('Programa pospuesto','No se pudo actualizar el clima real; por seguridad no se inicia.');return}const rainLimit=Math.max(0,+$('rainLimit').value||2),windLimit=Math.max(1,+$('windLimit').value||35);if(!weather){log('Programa pospuesto','No hay clima real actualizado; por seguridad no se inicia.');return}if((rainLimit>0&&weather.rain3h>=rainLimit)||weather.wind>=windLimit){log('Programa pospuesto por clima real','Lluvia prevista '+weather.rain3h.toFixed(1)+' mm/3h; viento '+weather.wind+' km/h.');return}if($('mode').value==='manual'){log('Programa omitido','El modo manual no permite automatización programada.');return}for(const p of due){for(const z of zones){let minutes=+(p.durations[z.id]||0);if(minutes<=0)continue;if($('mode').value==='vac')minutes=Math.max(1,Math.round(minutes*.6));if(weather.temp>=30)minutes=Math.round(minutes*1.15);minutes=Math.max(1,Math.min(240,minutes));z.minutes=minutes;log('Programa iniciado',p.name+' · '+z.name+' · '+minutes+' min');const ok=await commandZone(z,true,true);if(!ok){log('Programa interrumpido','No se pudo enviar la orden ON a '+z.name);return}await new Promise(resolve=>setTimeout(resolve,minutes*60000));await commandZone(z,false,true)}log('Programa finalizado',p.name+'; clima real consultado antes de iniciar.')}}finally{scheduleRunning=false}},15000);
+</script>
+</body>
+</html>
