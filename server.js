@@ -87,6 +87,39 @@ function clearZoneTimer(id) {
   if (old) clearTimeout(old);
   autoOffTimers.delete(String(id));
 }
+let sequenceState = { running: false, currentZone: null, step: 0, total: 0, message: 'Secuencia inactiva', runId: 0 };
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+async function runSequence(runId, items) {
+  sequenceState = { running: true, currentZone: null, step: 0, total: items.length, message: 'Secuencia iniciada', runId };
+  try {
+    for (let i = 0; i < items.length; i++) {
+      if (sequenceState.runId !== runId) return;
+      const item = items[i], zone = zones[String(item.id)];
+      sequenceState.currentZone = zone.name; sequenceState.step = i + 1;
+      sequenceState.message = 'Regando ' + zone.name + ' (' + (i + 1) + '/' + items.length + ') por ' + item.minutes + ' min';
+      await sendZoneCommand(zone, true);
+      scheduleAutoOff(zone, item.minutes);
+      const endAt = Date.now() + item.minutes * 60000;
+      while (Date.now() < endAt && sequenceState.runId === runId) {
+        await sleep(Math.min(1000, endAt - Date.now()));
+      }
+      if (sequenceState.runId !== runId) return;
+      clearZoneTimer(zone.id);
+      await sendZoneCommand(zone, false);
+      console.log('Secuencia: OFF confirmado enviado a zona ' + zone.id);
+    }
+    if (sequenceState.runId === runId) {
+      sequenceState.running = false; sequenceState.currentZone = null; sequenceState.message = 'Ciclo secuencial finalizado';
+    }
+  } catch (e) {
+    sequenceState.running = false; sequenceState.message = 'Error en secuencia: ' + e.message;
+    console.error('Fallo en secuencia:', e.message);
+    for (const zone of Object.values(zones)) {
+      clearZoneTimer(zone.id);
+      try { await sendZoneCommand(zone, false); } catch (offError) { console.error('Fallo de seguridad OFF zona ' + zone.id + ': ' + offError.message); }
+    }
+  }
+}
 function scheduleAutoOff(zone, minutes) {
   clearZoneTimer(zone.id);
   const timer = setTimeout(async () => {
@@ -111,6 +144,37 @@ app.get('/api/health', (_req, res) => res.json({
 app.get('/api/zones', (_req, res) => res.json({
   zones: Object.values(zones).map(({ id, name, code }) => ({ id, name, code })),
 }));
+
+app.get('/api/sequence/status', (_req, res) => res.json({ ok: true, ...sequenceState, runId: undefined }));
+app.post('/api/sequence/start', async (req, res, next) => {
+  try {
+    if (sequenceState.running) return res.status(409).json({ ok: false, error: 'Ya hay una secuencia en curso', sequence: sequenceState });
+    const requested = Array.isArray(req.body?.zones) ? req.body.zones : [];
+    if (!requested.length || requested.length > 2) return res.status(400).json({ ok: false, error: 'Indicá una o dos zonas con su duración.' });
+    const items = requested.map(item => {
+      const id = Number(item.id), zone = zones[String(id)], minutes = Number(item.minutes);
+      if (!zone || !Number.isFinite(minutes) || minutes < 1 || minutes > 240) throw Object.assign(new Error('Zona o duración inválida'), { status: 400 });
+      return { id, minutes: Math.floor(minutes) };
+    });
+    const runId = sequenceState.runId + 1;
+    sequenceState = { running: true, currentZone: null, step: 0, total: items.length, message: 'Secuencia en preparación', runId };
+    runSequence(runId, items);
+    res.json({ ok: true, accepted: true, message: 'Secuencia iniciada en el servidor. Puede cerrar la página; no reinicie el servicio durante el ciclo.' });
+  } catch (e) { next(e); }
+});
+app.post('/api/sequence/stop', async (_req, res, next) => {
+  try {
+    sequenceState.runId++;
+    sequenceState.running = false; sequenceState.currentZone = null; sequenceState.message = 'Secuencia detenida por el usuario';
+    const results = [];
+    for (const zone of Object.values(zones)) {
+      clearZoneTimer(zone.id);
+      try { await sendZoneCommand(zone, false); results.push({ zone: zone.id, ok: true }); }
+      catch (e) { results.push({ zone: zone.id, ok: false, error: e.message }); }
+    }
+    res.json({ ok: true, stopped: true, results, warning: results.some(x => !x.ok) ? 'No se pudo enviar OFF a todas las zonas.' : undefined });
+  } catch (e) { next(e); }
+});
 
 app.get('/api/device/status', async (_req, res, next) => {
   try {
