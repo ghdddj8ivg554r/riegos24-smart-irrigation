@@ -59,6 +59,17 @@ async function getDeviceZoneStates() {
     return { id: zone.id, code: zone.code, known: !!dp && typeof dp.value === 'boolean', on: dp && typeof dp.value === 'boolean' ? dp.value : null, value: dp?.value ?? null };
   });
 }
+
+async function waitForZoneOff(zoneId, attempts = 5) {
+  let states = [];
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    states = await getDeviceZoneStates();
+    const target = states.find(state => state.id === zoneId);
+    if (target?.known && target.on === false && states.every(state => state.known)) return states;
+    if (attempt < attempts - 1) await sleep(1000);
+  }
+  return states;
+}
 async function getWeatherSafety() {
   const url = 'https://api.open-meteo.com/v1/forecast?latitude=-27.33&longitude=-58.57&current=precipitation,wind_speed_10m&hourly=precipitation&forecast_days=1&forecast_hours=4&timezone=America%2FArgentina%2FCordoba';
   const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
@@ -174,15 +185,15 @@ async function runSequence(runId, items) {
       const afterOff = await getDeviceZoneStates();
       if (afterOff.some(state => !state.known || state.on)) throw new Error('No se pudo confirmar OFF en ambas zonas; se cancela el riego.');
       await sendZoneCommand(zone, true);
-      scheduleAutoOff(zone, item.minutes);
+      // La secuencia gestiona su propio apagado; no crear un segundo temporizador concurrente.
       await recordEvent('Zona encendida', zone.name + ' por ' + item.minutes + ' min', zone.id, true, 'sequence');
       const endAt = Date.now() + item.minutes * 60000;
       while (Date.now() < endAt && sequenceState.runId === runId) await sleep(Math.min(1000, endAt - Date.now()));
       if (sequenceState.runId !== runId) return;
       clearZoneTimer(zone.id);
       await sendZoneCommand(zone, false);
-      const confirmedOff = await getDeviceZoneStates();
-      if (confirmedOff.some(state => !state.known || (state.id === zone.id && state.on))) throw new Error('No se confirmó el apagado de ' + zone.name);
+      const confirmedOff = await waitForZoneOff(zone.id, 5);
+      if (confirmedOff.some(state => !state.known) || confirmedOff.some(state => state.id === zone.id && state.on)) throw new Error('No se confirmó el apagado de ' + zone.name + ' después de 5 consultas');
       await recordEvent('Zona apagada', zone.name, zone.id, true, 'sequence');
     }
     if (sequenceState.runId === runId) {
