@@ -12,6 +12,7 @@ const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const PROGRAMS_URL = SUPABASE_URL ? SUPABASE_URL + '/rest/v1/riegos24_programs' : '';
 const EVENTS_URL = SUPABASE_URL ? SUPABASE_URL + '/rest/v1/riegos24_events' : '';
+const CONFIG_URL = SUPABASE_URL ? SUPABASE_URL + '/rest/v1/riegos24_config' : '';
 const RAIN_LIMIT_MM = Math.max(0, Number(process.env.WEATHER_RAIN_LIMIT_MM || 2));
 const WIND_LIMIT_KMH = Math.max(1, Number(process.env.WEATHER_WIND_LIMIT_KMH || 35));
 const TZ = process.env.SCHEDULE_TIMEZONE || 'America/Argentina/Cordoba';
@@ -218,6 +219,31 @@ app.get('/api/zones', (_req, res) => res.json({
   zones: Object.values(zones).map(({ id, name, code }) => ({ id, name, code })),
 }));
 
+app.get('/api/config', async (_req, res, next) => {
+  try {
+    const response = await fetch(CONFIG_URL + '?id=eq.main&select=config', { headers: supabaseHeaders({ Accept: 'application/json' }) });
+    if (!response.ok) throw new Error('No se pudo cargar la configuración (HTTP ' + response.status + ').');
+    const rows = await response.json();
+    res.json({ ok: true, config: rows?.[0]?.config || {} });
+  } catch (e) { next(e); }
+});
+app.put('/api/config', async (req, res, next) => {
+  try {
+    const incoming = req.body?.config;
+    if (!incoming || typeof incoming !== 'object' || !Array.isArray(incoming.zones) || incoming.zones.length !== 2) return res.status(400).json({ ok: false, error: 'La configuración debe incluir exactamente dos zonas.' });
+    const cleanZones = incoming.zones.map((z, i) => {
+      const name = String(z.name || '').trim().slice(0, 50);
+      const photo = typeof z.photo === 'string' && z.photo.startsWith('data:image/') && z.photo.length <= 350000 ? z.photo : null;
+      if (!name) throw Object.assign(new Error('El nombre de cada zona es obligatorio.'), { status: 400 });
+      return { id: i + 1, name, photo };
+    });
+    const config = { zones: cleanZones };
+    const response = await fetch(CONFIG_URL + '?on_conflict=id', { method: 'POST', headers: supabaseHeaders({ Prefer: 'resolution=merge-duplicates,return=minimal' }), body: JSON.stringify({ id: 'main', config, updated_at: new Date().toISOString() }) });
+    if (!response.ok) throw new Error('No se pudo guardar la configuración (HTTP ' + response.status + ').');
+    await recordEvent('Configuración guardada', 'Nombres y fotos de las dos zonas actualizados.', null, true, 'settings');
+    res.json({ ok: true, saved: true, config });
+  } catch (e) { next(e); }
+});
 app.get('/api/programs', async (_req, res, next) => {
   try { if (!programsReady) await loadPrograms(); res.json({ ok: true, timezone: TZ, programs }); }
   catch (e) { next(e); }
