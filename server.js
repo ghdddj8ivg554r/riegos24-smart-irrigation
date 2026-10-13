@@ -193,7 +193,8 @@ app.put('/api/programs', async (req, res, next) => {
         if (!Number.isFinite(m) || m < 0 || m > 240) throw Object.assign(new Error('Duración inválida en programa ' + (i + 1)), { status: 400 });
         durations[id] = Math.floor(m);
       }
-      return { id: Number(p.id) || i + 1, name: String(p.name || ('Programa ' + (i + 1))).slice(0, 80), time, days, durations, enabled: p.enabled === true };
+      const delayUntil = p.delayUntil && Number.isFinite(Date.parse(p.delayUntil)) ? new Date(p.delayUntil).toISOString() : null;
+      return { id: Number(p.id) || i + 1, name: String(p.name || ('Programa ' + (i + 1))).slice(0, 80), time, days, durations, enabled: p.enabled === true, delayUntil };
     });
     programs = clean;
     await persistPrograms();
@@ -266,7 +267,7 @@ app.post('/api/zones/:id/command', async (req, res, next) => {
 async function schedulerTick() {
   if (!programsReady) await loadPrograms();
   const now = localScheduleParts();
-  const due = programs.filter(p => p.enabled && p.days.includes(now.day) && p.time === now.time);
+  const due = programs.filter(p => p.enabled && p.days.includes(now.day) && p.time === now.time && (!p.delayUntil || Date.parse(p.delayUntil) <= Date.now()));
   for (const p of due) {
     const key = now.date + ' ' + p.id + ' ' + p.time;
     if (firedScheduleKeys.has(key)) continue;
