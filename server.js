@@ -2,12 +2,44 @@ import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
 import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
 const API_ACCESS_KEY = process.env.API_ACCESS_KEY || '';
 const baseUrl = (process.env.TUYA_BASE_URL || 'https://openapi.tuyaus.com').replace(/\/$/, '');
 const deviceId = process.env.TUYA_DEVICE_ID || '';
+const DATA_DIR = process.env.DATA_DIR || './data';
+const PROGRAMS_FILE = path.join(DATA_DIR, 'programs.json');
+const TZ = process.env.SCHEDULE_TIMEZONE || 'America/Argentina/Cordoba';
+let programs = [];
+let programsReady = false;
+const firedScheduleKeys = new Set();
+async function persistPrograms() {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  const temp = PROGRAMS_FILE + '.tmp';
+  await fs.writeFile(temp, JSON.stringify(programs, null, 2), 'utf8');
+  await fs.rename(temp, PROGRAMS_FILE);
+}
+async function loadPrograms() {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  try {
+    const data = JSON.parse(await fs.readFile(PROGRAMS_FILE, 'utf8'));
+    programs = Array.isArray(data) ? data : [];
+  } catch (e) {
+    if (e.code !== 'ENOENT') console.error('No se pudieron leer programas guardados:', e.message);
+    programs = [];
+  }
+  programsReady = true;
+}
+function localScheduleParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
+  const v = Object.fromEntries(parts.map(p => [p.type, p.value]));
+  const days = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  return { day: days[v.weekday], time: v.hour + ':' + v.minute, date: v.year + '-' + v.month + '-' + v.day };
+}
+
 const zones = {
   '1': { id: 1, name: 'Patio trasero', code: process.env.ZONE_1_CODE || 'switch_1' },
   '2': { id: 2, name: 'Patio delantero', code: process.env.ZONE_2_CODE || 'switch_2' },
@@ -145,6 +177,32 @@ app.get('/api/zones', (_req, res) => res.json({
   zones: Object.values(zones).map(({ id, name, code }) => ({ id, name, code })),
 }));
 
+app.get('/api/programs', async (_req, res, next) => {
+  try { if (!programsReady) await loadPrograms(); res.json({ ok: true, timezone: TZ, programs }); }
+  catch (e) { next(e); }
+});
+app.put('/api/programs', async (req, res, next) => {
+  try {
+    const incoming = req.body?.programs;
+    if (!Array.isArray(incoming) || incoming.length > 50) return res.status(400).json({ ok: false, error: 'La lista de programas no es válida (máximo 50).' });
+    const clean = incoming.map((p, i) => {
+      const time = String(p.time || '');
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw Object.assign(new Error('Hora inválida en programa ' + (i + 1)), { status: 400 });
+      const days = Array.isArray(p.days) ? [...new Set(p.days.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6))] : [];
+      const durations = {};
+      for (const id of [1, 2]) {
+        const m = Number(p.durations?.[id] ?? 0);
+        if (!Number.isFinite(m) || m < 0 || m > 240) throw Object.assign(new Error('Duración inválida en programa ' + (i + 1)), { status: 400 });
+        durations[id] = Math.floor(m);
+      }
+      return { id: Number(p.id) || i + 1, name: String(p.name || ('Programa ' + (i + 1))).slice(0, 80), time, days, durations, enabled: p.enabled === true };
+    });
+    programs = clean;
+    await persistPrograms();
+    programsReady = true;
+    res.json({ ok: true, programs, saved: true });
+  } catch (e) { next(e); }
+});
 app.get('/api/sequence/status', (_req, res) => res.json({ ok: true, ...sequenceState, runId: undefined }));
 app.post('/api/sequence/start', async (req, res, next) => {
   try {
@@ -213,10 +271,30 @@ app.post('/api/zones/:id/command', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+async function schedulerTick() {
+  if (!programsReady) await loadPrograms();
+  const now = localScheduleParts();
+  const due = programs.filter(p => p.enabled && p.days.includes(now.day) && p.time === now.time);
+  for (const p of due) {
+    const key = now.date + ' ' + p.id + ' ' + p.time;
+    if (firedScheduleKeys.has(key)) continue;
+    firedScheduleKeys.add(key);
+    // Retener solo las claves recientes para que el conjunto no crezca sin límite.
+    if (firedScheduleKeys.size > 500) firedScheduleKeys.clear();
+    if (sequenceState.running) { console.warn('Programa omitido porque ya hay una secuencia activa:', p.name); continue; }
+    const items = [1, 2].map(id => ({ id, minutes: Number(p.durations?.[id] || 0) })).filter(x => x.minutes > 0);
+    if (!items.length) { console.log('Programa sin duraciones; omitido:', p.name); continue; }
+    const runId = sequenceState.runId + 1;
+    console.log('Iniciando programa horario:', p.name, now.date, now.time);
+    runSequence(runId, items).catch(e => console.error('Error de programa:', e.message));
+  }
+}
+setInterval(() => schedulerTick().catch(e => console.error('Error del planificador:', e.message)), 15000);
 app.use((error, _req, res, _next) => {
   res.status(Number(error.status) || 500).json({
     ok: false, error: error.message || 'Error interno',
     ...(error.details ? { details: error.details } : {}),
   });
 });
-app.listen(port, () => console.log(`Riegos24 API escuchando en puerto ${port}`));
+loadPrograms().catch(e => console.error('No se pudieron cargar los programas:', e.message));
+app.listen(port, () => console.log(`Riegos24 API escuchando en puerto ${port}; zona horaria ${TZ}`));
