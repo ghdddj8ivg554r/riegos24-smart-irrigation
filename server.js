@@ -2,35 +2,41 @@ import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
 import crypto from 'node:crypto';
-import fs from 'node:fs/promises';
-import path from 'node:path';
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
 const API_ACCESS_KEY = process.env.API_ACCESS_KEY || '';
 const baseUrl = (process.env.TUYA_BASE_URL || 'https://openapi.tuyaus.com').replace(/\/$/, '');
 const deviceId = process.env.TUYA_DEVICE_ID || '';
-const DATA_DIR = process.env.DATA_DIR || './data';
-const PROGRAMS_FILE = path.join(DATA_DIR, 'programs.json');
+const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const PROGRAMS_URL = SUPABASE_URL ? SUPABASE_URL + '/rest/v1/riegos24_programs' : '';
 const TZ = process.env.SCHEDULE_TIMEZONE || 'America/Argentina/Cordoba';
 let programs = [];
 let programsReady = false;
 const firedScheduleKeys = new Set();
+
+function supabaseHeaders(extra = {}) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Falta configurar SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY en Render.');
+  }
+  return { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: 'Bearer ' + SUPABASE_SERVICE_ROLE_KEY, 'Content-Type': 'application/json', ...extra };
+}
 async function persistPrograms() {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  const temp = PROGRAMS_FILE + '.tmp';
-  await fs.writeFile(temp, JSON.stringify(programs, null, 2), 'utf8');
-  await fs.rename(temp, PROGRAMS_FILE);
+  const response = await fetch(PROGRAMS_URL + '?on_conflict=id', {
+    method: 'POST',
+    headers: supabaseHeaders({ Prefer: 'resolution=merge-duplicates,return=minimal' }),
+    body: JSON.stringify({ id: 'main', programs, updated_at: new Date().toISOString() }),
+  });
+  if (!response.ok) throw new Error('No se pudieron guardar los programas en Supabase (HTTP ' + response.status + ').');
 }
 async function loadPrograms() {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  try {
-    const data = JSON.parse(await fs.readFile(PROGRAMS_FILE, 'utf8'));
-    programs = Array.isArray(data) ? data : [];
-  } catch (e) {
-    if (e.code !== 'ENOENT') console.error('No se pudieron leer programas guardados:', e.message);
-    programs = [];
-  }
+  const response = await fetch(PROGRAMS_URL + '?id=eq.main&select=programs', {
+    headers: supabaseHeaders({ Accept: 'application/json' }),
+  });
+  if (!response.ok) throw new Error('No se pudieron cargar los programas de Supabase (HTTP ' + response.status + ').');
+  const rows = await response.json();
+  programs = Array.isArray(rows?.[0]?.programs) ? rows[0].programs : [];
   programsReady = true;
 }
 function localScheduleParts(date = new Date()) {
@@ -44,11 +50,9 @@ const zones = {
   '1': { id: 1, name: 'Patio trasero', code: process.env.ZONE_1_CODE || 'switch_1' },
   '2': { id: 2, name: 'Patio delantero', code: process.env.ZONE_2_CODE || 'switch_2' },
 };
-
-// IMPORTANTE: estos temporizadores son de respaldo y se pierden si Render reinicia el proceso.
 const autoOffTimers = new Map();
 
-app.use(cors({ origin: true, methods: ['GET', 'POST', 'OPTIONS'], allowedHeaders: ['Content-Type', 'x-api-key'] }));
+app.use(cors({ origin: true, methods: ['GET', 'POST', 'PUT', 'OPTIONS'], allowedHeaders: ['Content-Type', 'x-api-key'] }));
 app.use(express.json({ limit: '32kb' }));
 app.use(express.static('public'));
 app.use((req, res, next) => {
@@ -132,13 +136,11 @@ async function runSequence(runId, items) {
       await sendZoneCommand(zone, true);
       scheduleAutoOff(zone, item.minutes);
       const endAt = Date.now() + item.minutes * 60000;
-      while (Date.now() < endAt && sequenceState.runId === runId) {
-        await sleep(Math.min(1000, endAt - Date.now()));
-      }
+      while (Date.now() < endAt && sequenceState.runId === runId) await sleep(Math.min(1000, endAt - Date.now()));
       if (sequenceState.runId !== runId) return;
       clearZoneTimer(zone.id);
       await sendZoneCommand(zone, false);
-      console.log('Secuencia: OFF confirmado enviado a zona ' + zone.id);
+      console.log('Secuencia: OFF enviado a zona ' + zone.id);
     }
     if (sequenceState.runId === runId) {
       sequenceState.running = false; sequenceState.currentZone = null; sequenceState.message = 'Ciclo secuencial finalizado';
@@ -155,14 +157,9 @@ async function runSequence(runId, items) {
 function scheduleAutoOff(zone, minutes) {
   clearZoneTimer(zone.id);
   const timer = setTimeout(async () => {
-    try {
-      await sendZoneCommand(zone, false);
-      console.log(`Auto-OFF enviado a zona ${zone.id} (${zone.name})`);
-    } catch (e) {
-      console.error(`FALLO auto-OFF zona ${zone.id}: ${e.message}`);
-    } finally {
-      autoOffTimers.delete(String(zone.id));
-    }
+    try { await sendZoneCommand(zone, false); console.log(`Auto-OFF enviado a zona ${zone.id} (${zone.name})`); }
+    catch (e) { console.error(`FALLO auto-OFF zona ${zone.id}: ${e.message}`); }
+    finally { autoOffTimers.delete(String(zone.id)); }
   }, minutes * 60000);
   timer.unref?.();
   autoOffTimers.set(String(zone.id), timer);
@@ -172,6 +169,7 @@ function scheduleAutoOff(zone, minutes) {
 app.get('/api/health', (_req, res) => res.json({
   ok: true, app: 'Riegos24 API', mode: 'tuya-cloud',
   configured: Boolean(API_ACCESS_KEY && process.env.TUYA_ACCESS_ID && process.env.TUYA_ACCESS_SECRET && deviceId),
+  programsStorage: Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) ? 'supabase' : 'not_configured',
 }));
 app.get('/api/zones', (_req, res) => res.json({
   zones: Object.values(zones).map(({ id, name, code }) => ({ id, name, code })),
@@ -200,7 +198,7 @@ app.put('/api/programs', async (req, res, next) => {
     programs = clean;
     await persistPrograms();
     programsReady = true;
-    res.json({ ok: true, programs, saved: true });
+    res.json({ ok: true, programs, saved: true, storage: 'supabase' });
   } catch (e) { next(e); }
 });
 app.get('/api/sequence/status', (_req, res) => res.json({ ok: true, ...sequenceState, runId: undefined }));
@@ -251,9 +249,7 @@ app.post('/api/zones/:id/command', async (req, res, next) => {
     const zone = zones[req.params.id];
     if (!zone) return res.status(404).json({ ok: false, error: 'Zona inexistente' });
     if (typeof req.body?.on !== 'boolean') return res.status(400).json({ ok: false, error: 'El campo on debe ser true o false' });
-    if (req.body.on && req.body.confirm !== 'I_CONFIRM_WATERING') {
-      return res.status(400).json({ ok: false, error: 'Falta confirmación explícita para encender', required: 'confirm: I_CONFIRM_WATERING' });
-    }
+    if (req.body.on && req.body.confirm !== 'I_CONFIRM_WATERING') return res.status(400).json({ ok: false, error: 'Falta confirmación explícita para encender', required: 'confirm: I_CONFIRM_WATERING' });
     if (!req.body.on) {
       clearZoneTimer(zone.id);
       const result = await sendZoneCommand(zone, false);
@@ -263,11 +259,7 @@ app.post('/api/zones/:id/command', async (req, res, next) => {
     const minutes = Number.isFinite(rawMinutes) && rawMinutes > 0 ? Math.max(1, Math.min(240, Math.floor(rawMinutes))) : 1;
     const result = await sendZoneCommand(zone, true);
     const autoOffAt = scheduleAutoOff(zone, minutes);
-    res.json({
-      ok: true, zone: zone.id, code: zone.code, requested: true, durationMinutes: minutes,
-      autoOffAt, commandAccepted: result.success !== false, tuya: result,
-      warning: 'El temporizador es de respaldo y no sobrevive a reinicios de Render.',
-    });
+    res.json({ ok: true, zone: zone.id, code: zone.code, requested: true, durationMinutes: minutes, autoOffAt, commandAccepted: result.success !== false, tuya: result, warning: 'El temporizador es de respaldo y no sobrevive a reinicios de Render.' });
   } catch (e) { next(e); }
 });
 
@@ -279,7 +271,6 @@ async function schedulerTick() {
     const key = now.date + ' ' + p.id + ' ' + p.time;
     if (firedScheduleKeys.has(key)) continue;
     firedScheduleKeys.add(key);
-    // Retener solo las claves recientes para que el conjunto no crezca sin límite.
     if (firedScheduleKeys.size > 500) firedScheduleKeys.clear();
     if (sequenceState.running) { console.warn('Programa omitido porque ya hay una secuencia activa:', p.name); continue; }
     const items = [1, 2].map(id => ({ id, minutes: Number(p.durations?.[id] || 0) })).filter(x => x.minutes > 0);
@@ -291,10 +282,7 @@ async function schedulerTick() {
 }
 setInterval(() => schedulerTick().catch(e => console.error('Error del planificador:', e.message)), 15000);
 app.use((error, _req, res, _next) => {
-  res.status(Number(error.status) || 500).json({
-    ok: false, error: error.message || 'Error interno',
-    ...(error.details ? { details: error.details } : {}),
-  });
+  res.status(Number(error.status) || 500).json({ ok: false, error: error.message || 'Error interno', ...(error.details ? { details: error.details } : {}) });
 });
-loadPrograms().catch(e => console.error('No se pudieron cargar los programas:', e.message));
+loadPrograms().catch(e => console.error('No se pudieron cargar programas al iniciar:', e.message));
 app.listen(port, () => console.log(`Riegos24 API escuchando en puerto ${port}; zona horaria ${TZ}`));
