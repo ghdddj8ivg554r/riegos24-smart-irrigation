@@ -9,8 +9,8 @@ const API_ACCESS_KEY = process.env.API_ACCESS_KEY || '';
 const baseUrl = (process.env.TUYA_BASE_URL || 'https://openapi.tuyaus.com').replace(/\/$/, '');
 const deviceId = process.env.TUYA_DEVICE_ID || '';
 const zones = {
-  '1': { id: 1, name: 'Patio delantero', code: process.env.ZONE_1_CODE || 'switch_1' },
-  '2': { id: 2, name: 'Patio trasero', code: process.env.ZONE_2_CODE || 'switch_2' },
+  '1': { id: 1, name: 'Patio trasero', code: process.env.ZONE_1_CODE || 'switch_1' },
+  '2': { id: 2, name: 'Patio delantero', code: process.env.ZONE_2_CODE || 'switch_2' },
 };
 
 // IMPORTANTE: estos temporizadores son de respaldo y se pierden si Render reinicia el proceso.
