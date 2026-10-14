@@ -522,7 +522,7 @@ case 'zoff':if(z)realZoneCommand(z,false).catch(e=>toast('Error enviando OFF: '+
 case 'all':
 if(S.locked){toast('Parada de seguridad activa: revisá y rearmá el sistema');break}
 if(!cf){cf=1;setTimeout(()=>{cf=0;render()},4000);toast('Tocá de nuevo para confirmar: se regarán todas las zonas'+(S.seq?', una por vez':''))}
-else{cf=0;Z.forEach(x=>enqueue(x,x.sel*60,'manual'))}
+else{cf=0;realStartSequence(serverItems()).catch(e=>toast('No se pudo iniciar la secuencia: '+e.message));return}
 break;
 case 'pause':pause();break;
 case 'stop':if(!confirm('¿Enviar orden de parada a ambas zonas?'))break;realStopAll().catch(e=>toast('Error al detener: '+e.message));return;
@@ -734,8 +734,8 @@ async function realZoneCommand(z,on){
   await refreshRealStatus(false);
 }
 function tick(){T=Date.now();if(online&&Date.now()-lastReal>5000){lastReal=Date.now();refreshRealStatus(false).catch(()=>{})}}
-function cmd(){/* las órdenes solo se envían mediante realZoneCommand / realStopAll */}
-function enqueue(){toast('Usá los controles conectados al servidor.');}
+function cmd(z,on){if(!z)return;realZoneCommand(z,!!on).catch(e=>toast('No se pudo enviar la orden: '+e.message));}
+function enqueue(z,seconds,source){if(!z)return;z.sel=Math.max(1,Math.min(240,Math.ceil(Number(seconds||60)/60)));realZoneCommand(z,true).catch(e=>toast('No se pudo iniciar el riego: '+e.message));}
 function next(){return null}
 function runProg(){toast('Los programas horarios se ejecutan en el servidor cuando están guardados y habilitados.');}
 function pause(){toast('Pausar no está disponible en el backend. Para cerrar las válvulas, usá Detener todo.');}
