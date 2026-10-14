@@ -387,7 +387,7 @@ app.use((error, _req, res, _next) => {
   res.status(Number(error.status) || 500).json({ ok: false, error: error.message || 'Error interno', ...(error.details ? { details: error.details } : {}) });
 });
 loadPrograms().catch(e => console.error('No se pudieron cargar programas al iniciar:', e.message));
-app.listen(port, () => {
+app.listen(port, '0.0.0.0', () => {
   console.log(`Riegos24 API escuchando en puerto ${port}; zona horaria ${TZ}`);
   (async () => {
     try {
