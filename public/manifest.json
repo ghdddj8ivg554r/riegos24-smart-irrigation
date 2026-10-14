@@ -1,0 +1,19 @@
+{
+  "name": "Riegos24 Smart Irrigation",
+  "short_name": "Riegos24",
+  "description": "Sistemas de riego inteligente",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b130e",
+  "theme_color": "#167f3b",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
