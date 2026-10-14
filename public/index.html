@@ -5,7 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0c1912">
 <title>Riegos24 Smart Irrigation</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E💧%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<link rel="manifest" href="/manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Riegos24">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/icon.svg">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 /* ========== COLORES (claro, oscuro y automático) ========== */
@@ -262,7 +268,7 @@ if(Array.isArray(d.Z))d.Z.forEach(x=>{const z=Z.find(q=>q.id===x.id);if(z&&x&&ty
 if(Array.isArray(d.P)&&d.P.length)P=d.P.filter(p=>p&&typeof p.name==='string'&&Array.isArray(p.days)&&p.z&&typeof p.z==='object'&&typeof p.time==='string')}catch(_){}}
 
 /* ---------- Estado de ejecución (no se guarda) ---------- */
-let OFF=-3*36e5,T=Date.now(),last=T,lastReal=Date.now(),tab='home',paused=false,online=false,cf=0,MOD=null,ren=null,delc=0,ovr=false,csv='',Q=[],LOG=[],dm={},tt,histF='all',pf='act',KEY='',showKey=false,SES={tot:0,done:0},conn={st:'idle',msg:'Ingresá tu API_ACCESS_KEY y comprobá el dispositivo'};
+let OFF=-3*36e5,T=Date.now(),last=T,lastReal=Date.now(),tab='home',paused=false,online=false,cf=0,MOD=null,ren=null,delc=0,ovr=false,csv='',Q=[],LOG=[],dm={},tt,histF='all',pf='act',KEY=(()=>{try{return localStorage.getItem('r24_api_access_key')||''}catch(_){return ''}})(),showKey=false,SES={tot:0,done:0},conn={st:'idle',msg:'Ingresá tu API_ACCESS_KEY y comprobá el dispositivo'};
 const fired=new Set(),dis=new Set(),ST={base:0,used:0,liters:0,sk:0};
 const R={};Z.forEach(z=>R[z.id]={st:'unknown',want:'off',left:0,tot:0,src:''});
 
@@ -460,8 +466,8 @@ const map=Z.map(z=>'<label>Canal de la Zona '+z.id+' ('+esc(z.name)+')<select cl
 return hdr()+'<div class="body"><div class="tt" style="flex-direction:column;align-items:flex-start;gap:2px"><h2>Ajustes</h2><div class="s">Configuración del sistema y conexión</div></div>'+
 '<div class="card"><h3>Conexión con el backend</h3><label>URL del servidor<input class="in" type="url" placeholder="https://riegos24-smart-irrigation.onrender.com" value="'+esc(S.url)+'" data-c="url" autocomplete="off"></label>'+
 '<label>API_ACCESS_KEY<div class="pw"><input class="in" type="'+(showKey?'text':'password')+'" value="'+esc(KEY)+'" data-c="key" autocomplete="off" aria-label="Clave de acceso"><button class="ib" data-a="eye" aria-label="Mostrar u ocultar la clave">'+ico('eye')+'</button></div></label>'+
-'<button class="btn w" style="margin-top:12px" data-a="conn">Guardar y comprobar conexión</button><div class="cs '+conn.st+'">'+(conn.st==='ok'?'✔ ':'')+esc(conn.msg)+'</div>'+
-'<div class="s" style="margin-top:6px">La clave se mantiene solo en memoria en esta pestaña. La comprobación consulta la API y el estado real de ambos relés; no compartas la clave ni la incluyas en el archivo.</div></div>'+
+'<button class="btn w" style="margin-top:12px" data-a="conn">Guardar y comprobar conexión</button><button class="btn ghost w" style="margin-top:8px" data-a="keyclear">Borrar clave guardada</button><div class="cs '+conn.st+'">'+(conn.st==='ok'?'✔ ':'')+esc(conn.msg)+'</div>'+
+'<div class="s" style="margin-top:6px">La clave se guarda en el almacenamiento local de este dispositivo y se reutiliza al volver a abrir la app. No se incluye en el archivo ni se envía salvo en las solicitudes autenticadas al servidor. Si compartís el teléfono, usá bloqueo de pantalla; para quitarla, tocá “Borrar clave guardada”.</div></div>'+
 '<div class="card"><h3>Configuración general</h3><label>Modo de riego<select class="in" data-c="mode">'+mo+'</select></label><label>Máximo por sesión (minutos)<input class="in" type="number" inputmode="numeric" value="'+S.max+'" data-c="ms"></label><label>Ubicación<input class="in" value="'+esc(S.loc)+'" data-c="loc" maxlength="60"></label>'+
 '<label>Zona horaria<select class="in" data-c="tz">'+[[-3,'Argentina (UTC-3)'],[-4,'UTC-4'],[-5,'UTC-5'],[0,'UTC']].map(x=>'<option value="'+x[0]+'" '+(S.tz===x[0]?'selected':'')+'>'+x[1]+'</option>').join('')+'</select></label>'+
 swr('seq','',S.seq,'Zonas en secuencia (una por vez)')+swr('arm2','',S.armed,'Riego automático activado')+(S.locked?'<button class="btn red w" data-a="rearm">Parada de seguridad: revisar y rearmar</button>':'')+'</div>'+
@@ -537,6 +543,7 @@ case 'nt':S.notif[k]=S.notif[k]?0:1;break;
 case 'seq':S.seq=!S.seq;break;
 case 'th':S.theme=k;applyTheme();break;
 case 'eye':showKey=!showKey;break;
+case 'keyclear':KEY='';try{localStorage.removeItem('r24_api_access_key')}catch(_){}conn={st:'idle',msg:'Clave guardada eliminada de este dispositivo.'};render(1);return;
 case 'conn':checkConn();return;
 case 'dl':S.delayH=+k;break;
 case 'dlap':if(S.delayH>0){S.delayUntil=Date.now()+S.delayH*36e5;P.forEach(q=>q.delayUntil=new Date(S.delayUntil).toISOString());log(null,'Retraso por clima aplicado','Pausa de '+S.delayH+' horas','clima','cloud');if(online)saveRemotePrograms().then(()=>toast('Pausa guardada en el servidor por '+S.delayH+' horas.')).catch(e=>toast('No se pudo guardar la pausa: '+e.message));else toast('Pausa configurada localmente; conectá el servidor para guardarla.')}else{S.delayUntil=0;P.forEach(q=>q.delayUntil=null);if(online)saveRemotePrograms().catch(e=>toast(e.message));toast('Sin pausa: los programas siguen su horario')}break;
@@ -589,7 +596,7 @@ case 'ms':S.max=Math.max(5,Math.round(n)||60);break;
 case 'loc':S.loc=v.trim().slice(0,60)||S.loc;break;
 case 'tz':S.tz=n;OFF=n*36e5;break;
 case 'url':S.url=v.trim();break;
-case 'key':KEY=v;break;
+case 'key':KEY=v;try{if(KEY.trim())localStorage.setItem('r24_api_access_key',KEY);else localStorage.removeItem('r24_api_access_key')}catch(_){}break;
 case 'rp':S.pop=Math.max(0,Math.min(100,isNaN(n)?60:n));break;
 case 'r3':S.mm3=Math.max(.1,isNaN(n)?5:n);break;
 case 'rr':S.recMm=Math.max(.1,isNaN(n)?5:n);break;
