@@ -326,9 +326,9 @@ app.get('/api/device/status', async (_req, res, next) => {
     const result = Array.isArray(data.result) ? data.result : [];
     const zoneStatus = Object.values(zones).map(zone => {
       const dp = result.find(item => item.code === zone.code);
-      return { id: zone.id, name: zone.name, code: zone.code, known: Boolean(dp), on: dp && typeof dp.value === 'boolean' ? dp.value : null, value: dp?.value ?? null };
+      return { id: zone.id, name: zone.name, code: zone.code, known: Boolean(dp) && typeof dp.value === 'boolean', on: dp && typeof dp.value === 'boolean' ? dp.value : null, value: dp?.value ?? null };
     });
-    res.json({ ok: true, deviceId, result, zones: zoneStatus, statusConfirmed: zoneStatus.every(z => z.known && typeof z.on === 'boolean') });
+    res.json({ ok: true, deviceId, result, availableCodes: result.map(item=>item.code), zones: zoneStatus, statusConfirmed: zoneStatus.every(z => z.known && typeof z.on === 'boolean') });
   } catch (e) { next(e); }
 });
 
@@ -363,6 +363,12 @@ app.post('/api/zones/:id/command', async (req, res, next) => {
 
 async function schedulerTick() {
   if (!programsReady) await loadPrograms();
+  const expired = programs.filter(p => p.delayUntil && Date.parse(p.delayUntil) <= Date.now());
+  if (expired.length) {
+    expired.forEach(p => { p.delayUntil = null; });
+    try { await persistPrograms(); await recordEvent('Retraso climático finalizado', 'La pausa venció; los próximos horarios vuelven a quedar habilitados.', null, true, 'scheduler'); }
+    catch (e) { console.error('No se pudo limpiar la pausa vencida en la nube:', e.message); }
+  }
   const now = localScheduleParts();
   const due = programs.filter(p => p.enabled && p.days.includes(now.day) && p.time === now.time && (!p.delayUntil || Date.parse(p.delayUntil) <= Date.now()));
   for (const p of due) {
