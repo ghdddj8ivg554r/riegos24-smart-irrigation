@@ -546,8 +546,8 @@ case 'eye':showKey=!showKey;break;
 case 'keyclear':KEY='';try{localStorage.removeItem('r24_api_access_key')}catch(_){}conn={st:'idle',msg:'Clave guardada eliminada de este dispositivo.'};render(1);return;
 case 'conn':checkConn();return;
 case 'dl':S.delayH=+k;break;
-case 'dlap':if(S.delayH>0){S.delayUntil=Date.now()+S.delayH*36e5;P.forEach(q=>q.delayUntil=new Date(S.delayUntil).toISOString());log(null,'Retraso por clima aplicado','Pausa de '+S.delayH+' horas','clima','cloud');if(online)saveRemotePrograms().then(()=>toast('Pausa guardada en el servidor por '+S.delayH+' horas.')).catch(e=>toast('No se pudo guardar la pausa: '+e.message));else toast('Pausa configurada localmente; conectá el servidor para guardarla.')}else{S.delayUntil=0;P.forEach(q=>q.delayUntil=null);if(online)saveRemotePrograms().catch(e=>toast(e.message));toast('Sin pausa: los programas siguen su horario')}break;
-case 'dlclr':S.delayUntil=0;S.delayH=0;P.forEach(q=>q.delayUntil=null);if(online)saveRemotePrograms().catch(e=>toast(e.message));log(null,'Retraso por clima quitado','','clima','cloud');break;
+case 'dlap':if(S.delayH>0){if(!online){toast('Conectá y verificá el controlador antes de guardar la pausa en la nube.');break}S.delayUntil=Date.now()+S.delayH*36e5;P.forEach(q=>q.delayUntil=new Date(S.delayUntil).toISOString());saveRemotePrograms().then(()=>{save();log(null,'Retraso por clima guardado en la nube','Pausa de '+S.delayH+' horas; vence '+new Date(S.delayUntil).toLocaleString('es-AR'),'clima','cloud');toast('Pausa guardada en la nube por '+S.delayH+' horas. Los horarios se omiten durante la pausa y se reanudan automáticamente al vencer.');render(1)}).catch(e=>toast('No se pudo guardar la pausa: '+e.message))}else{toast('Elegí 24, 48 o 72 horas antes de aplicar la pausa.')}break;
+case 'dlclr':if(!online){toast('Conectá el servidor para quitar la pausa guardada en la nube.');break}S.delayUntil=0;S.delayH=0;P.forEach(q=>q.delayUntil=null);saveRemotePrograms().then(()=>{save();log(null,'Retraso climático quitado','Los próximos horarios quedan habilitados.','clima','cloud');toast('Pausa quitada en la nube. Los próximos horarios quedan habilitados.');render(1)}).catch(e=>toast('No se pudo quitar la pausa: '+e.message));break;
 case 'wxr':fetchRealWeather();return;
 case 'pf':pf=k;break;
 case 'hf':histF=k;break;
@@ -626,22 +626,31 @@ async function apiFetch(path,method='GET',body){
   } finally {clearTimeout(timer)}
 }
 async function refreshRealStatus(showToast=false){
-  try{
-    const d=await apiFetch('/api/device/status');
-    online=true;
-    (d.zones||[]).forEach(q=>{
-      const r=R[q.id]; if(!r)return;
-      r.st=(q.known&&typeof q.on==='boolean')?(q.on?'on':'off'):'unknown';
-      r.want=r.st==='on'?'on':'off';
-      if(r.st!=='on'){r.left=0;r.tot=0}
-    });
-    conn={st:d.statusConfirmed?'ok':'warn',msg:d.statusConfirmed?'Controlador conectado; estado de los dos relés confirmado.':'API conectada, pero no se pudo confirmar el estado de ambos relés.'};
-    if(showToast)toast(conn.msg);
-  }catch(e){
-    online=false;Z.forEach(z=>{R[z.id].st='unknown';R[z.id].want='off'});
-    conn={st:'err',msg:'No se pudo verificar el controlador: '+e.message};
-    if(showToast)toast(conn.msg);
+  let lastError=null,d=null;
+  for(let attempt=0;attempt<3;attempt++){
+    try{d=await apiFetch('/api/device/status');lastError=null;break}
+    catch(e){lastError=e;if(attempt<2)await new Promise(r=>setTimeout(r,900*(attempt+1)))}
   }
+  if(!d){
+    online=false;Z.forEach(z=>{R[z.id].st='unknown';R[z.id].want='off'});
+    conn={st:'err',msg:'No se pudo consultar Tuya: '+(lastError?.message||'sin respuesta')};
+    if(showToast)toast(conn.msg);
+    render(1);return;
+  }
+  const states=d.zones||[];
+  online=!!d.statusConfirmed;
+  states.forEach(q=>{
+    const r=R[q.id];if(!r)return;
+    r.st=(q.known&&typeof q.on==='boolean')?(q.on?'on':'off'):'unknown';
+    r.want=r.st==='on'?'on':'off';
+    if(r.st!=='on'){r.left=0;r.tot=0}
+  });
+  if(d.statusConfirmed)conn={st:'ok',msg:'Controlador conectado; estado real de ambos relés confirmado.'};
+  else{
+    const missing=states.filter(q=>!(q.known&&typeof q.on==='boolean')).map(q=>'zona '+q.id+' ('+q.code+')');
+    conn={st:'warn',msg:'Tuya respondió, pero no informó el estado de '+(missing.join(', ')||'ambos relés')+'. Revisá los códigos DP del dispositivo.'};
+  }
+  if(showToast)toast(conn.msg);
   render(1);
 }
 async function checkConn(){
@@ -668,6 +677,9 @@ async function loadRemotePrograms(){
   if(!Array.isArray(d.programs))return;
   if(d.programs.length===0){await saveRemotePrograms();return;}
   P=d.programs.map((p,i)=>({id:Number(p.id)||i+1,name:String(p.name||('Programa '+(i+1))),ic:'💧',z:{1:Number(p.durations?.[1]||0),2:Number(p.durations?.[2]||0)},days:Array.isArray(p.days)?p.days:[],time:p.time||'07:00',on:p.enabled===true,delayUntil:p.delayUntil||null}));
+  const activeDelays=P.map(p=>Date.parse(p.delayUntil||'')).filter(t=>Number.isFinite(t)&&t>Date.now());
+  S.delayUntil=activeDelays.length?Math.max(...activeDelays):0;
+  S.delayH=S.delayUntil?Math.max(1,Math.ceil((S.delayUntil-Date.now())/36e5)):0;
   if(!P.length)P=[];
   S.armed=P.some(p=>p.on);save();
 }
@@ -740,7 +752,20 @@ async function realZoneCommand(z,on){
   await new Promise(r=>setTimeout(r,700));
   await refreshRealStatus(false);
 }
-function tick(){T=Date.now();if(online&&Date.now()-lastReal>5000){lastReal=Date.now();refreshRealStatus(false).catch(()=>{})}}
+let delayExpirySyncBusy=false;
+async function syncExpiredDelay(){
+  if(delayExpirySyncBusy||!online||!P.some(p=>p.delayUntil&&Date.parse(p.delayUntil)<=Date.now()))return;
+  delayExpirySyncBusy=true;
+  try{
+    P.forEach(p=>{if(p.delayUntil&&Date.parse(p.delayUntil)<=Date.now())p.delayUntil=null});
+    S.delayUntil=0;S.delayH=0;save();
+    await saveRemotePrograms();
+    log(null,'Retraso climático finalizado','La pausa venció; los programas quedan habilitados para sus próximos horarios.','clima','cloud');
+    toast('Finalizó la pausa por clima. Los programas retoman sus próximos horarios.');
+  }catch(e){toast('La pausa venció, pero no se pudo sincronizar en la nube: '+e.message)}
+  finally{delayExpirySyncBusy=false;render(1)}
+}
+function tick(){T=Date.now();if(online&&Date.now()-lastReal>5000){lastReal=Date.now();refreshRealStatus(false).catch(()=>{})}if(online&&S.delayUntil&&S.delayUntil<=Date.now())syncExpiredDelay()}
 function cmd(z,on){if(!z)return;realZoneCommand(z,!!on).catch(e=>toast('No se pudo enviar la orden: '+e.message));}
 function enqueue(z,seconds,source){if(!z)return;z.sel=Math.max(1,Math.min(240,Math.ceil(Number(seconds||60)/60)));realZoneCommand(z,true).catch(e=>toast('No se pudo iniciar el riego: '+e.message));}
 function next(){return null}
