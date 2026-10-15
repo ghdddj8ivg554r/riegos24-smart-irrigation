@@ -270,7 +270,11 @@ if(Array.isArray(d.P)&&d.P.length)P=d.P.filter(p=>p&&typeof p.name==='string'&&A
 /* ---------- Estado de ejecución (no se guarda) ---------- */
 let OFF=-3*36e5,T=Date.now(),last=T,lastReal=Date.now(),tab='home',paused=false,online=false,cf=0,MOD=null,ren=null,delc=0,ovr=false,csv='',Q=[],LOG=[],realEvents=[],dm={},tt,histF='all',pf='act',KEY=(()=>{try{return localStorage.getItem('r24_api_access_key')||''}catch(_){return ''}})(),showKey=false,SES={tot:0,done:0},conn={st:'idle',msg:'Ingresá tu API_ACCESS_KEY y comprobá el dispositivo'};
 const fired=new Set(),dis=new Set(),ST={base:0,used:0,liters:0,sk:0};
-const R={};Z.forEach(z=>R[z.id]={st:'unknown',want:'off',left:0,tot:0,src:''});
+const R={};Z.forEach(z=>R[z.id]={st:'unknown',want:'off',left:0,tot:0,src:'',startedAt:0,approxTimer:false});
+const ZONE_TIMER_KEY='r24_zone_timers';
+function readZoneTimers(){try{return JSON.parse(localStorage.getItem(ZONE_TIMER_KEY)||'{}')}catch(_){return {}}}
+function writeZoneTimers(){try{const o={};Z.forEach(z=>{const r=R[z.id];if(r.startedAt&&r.tot>0)o[z.id]={startedAt:r.startedAt,tot:r.tot,approxTimer:!!r.approxTimer}});localStorage.setItem(ZONE_TIMER_KEY,JSON.stringify(o))}catch(_){}}
+function restoreZoneTimer(z){const v=readZoneTimers()[z.id],r=R[z.id];if(v&&Number.isFinite(v.startedAt)&&Number.isFinite(v.tot)&&v.tot>0){r.startedAt=v.startedAt;r.tot=v.tot;r.approxTimer=!!v.approxTimer;r.left=Math.max(0,r.tot-(Date.now()-r.startedAt)/1000);return true}return false}
 
 /* ---------- Tiempo (zona horaria configurable, formato 24 h) ---------- */
 const loc=t=>new Date(t+OFF),fmt=t=>pad(loc(t).getUTCHours())+':'+pad(loc(t).getUTCMinutes()),
@@ -505,7 +509,7 @@ document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dat
 A.innerHTML=({home,zones:zonesPage,prog:progs,wx,hist,set:sett})[tab]()+modal();upd();
 const rx=ren!==null&&$('rni');if(rx){rx.focus();rx.select()}}
 function upd(){const n=nextRun(),c=$('clk');if(c)c.textContent='';
-Z.forEach(z=>{const r=R[z.id],a=$('cd'+z.id);if(a){a.textContent=hms(r.left);const p=r.tot?Math.round((1-r.left/r.tot)*100):0;$('pc'+z.id).textContent=p+'%';$('pb'+z.id).style.width=p+'%'}});
+Z.forEach(z=>{const r=R[z.id],a=$('cd'+z.id);if(a){const elapsed=r.startedAt?Math.max(0,Math.floor((Date.now()-r.startedAt)/1000)):0;const p=r.tot?Math.min(100,Math.round(elapsed/r.tot*100)):0;a.textContent=hms(elapsed);$('pc'+z.id).textContent=p+'%';$('pb'+z.id).style.width=p+'%';}});
 const s=$('sq');if(s){const act=Z.some(x=>R[x.id].want==='on');s.textContent=(!act&&!Q.length)?'Secuencia inactiva · Paso 0/0':'Secuencia '+(paused?'en pausa':'en curso')+' · Paso '+Math.min(SES.done+1,SES.tot)+'/'+SES.tot}
 const x=$('nx');if(x)x.textContent=S.locked?'Programas bloqueados por la parada de seguridad':!S.armed?'Riego automático sin activar':n?'Próximo programa: '+n.p.name+', '+fmtD(n.f)+' '+fmt(n.f)+' (en '+dur(n.f-T)+')':'Sin programas próximos'}
 function applyTheme(){const r=document.documentElement;if(S.theme==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',S.theme)}
@@ -640,11 +644,18 @@ async function refreshRealStatus(showToast=false){
   const states=d.zones||[];
   online=!!d.statusConfirmed;
   states.forEach(q=>{
-    const r=R[q.id];if(!r)return;
+    const r=R[q.id],z=Z.find(x=>x.id===q.id);if(!r||!z)return;
+    const previous=r.st;
     r.st=(q.known&&typeof q.on==='boolean')?(q.on?'on':'off'):'unknown';
     r.want=r.st==='on'?'on':'off';
-    if(r.st!=='on'){r.left=0;r.tot=0}
+    if(r.st==='on'){
+      if(!r.startedAt&&!restoreZoneTimer(z)){r.startedAt=Date.now();r.tot=Math.max(60,Number(z.sel||5)*60);r.approxTimer=true;r.left=r.tot;}
+      if(!r.tot)r.tot=Math.max(60,Number(z.sel||5)*60);
+      r.left=Math.max(0,r.tot-(Date.now()-r.startedAt)/1000);
+    }else if(r.st==='off'){r.left=0;r.tot=0;r.startedAt=0;r.approxTimer=false;}
+    if(previous!==r.st)writeZoneTimers();
   });
+  writeZoneTimers();
   if(d.statusConfirmed)conn={st:'ok',msg:'Controlador conectado; estado real de ambos relés confirmado.'};
   else{
     const missing=states.filter(q=>!(q.known&&typeof q.on==='boolean')).map(q=>'zona '+q.id+' ('+q.code+')');
@@ -749,9 +760,11 @@ async function realZoneCommand(z,on){
   if(on){
     if(!confirm('¿Confirmás regar '+z.name+' durante '+z.sel+' minutos?'))return;
     const d=await apiFetch('/api/zones/'+z.id+'/command','POST',{on:true,confirm:'I_CONFIRM_WATERING',durationMinutes:z.sel});
+    R[z.id].startedAt=Date.now();R[z.id].tot=Math.max(60,Number(d.durationMinutes||z.sel)*60);R[z.id].left=R[z.id].tot;R[z.id].approxTimer=false;writeZoneTimers();
     toast(d.warning||('Orden de riego enviada a '+z.name+'. La aceptación no equivale a medir caudal.'));
   }else{
     await apiFetch('/api/zones/'+z.id+'/command','POST',{on:false});
+    R[z.id].startedAt=0;R[z.id].tot=0;R[z.id].left=0;R[z.id].approxTimer=false;writeZoneTimers();
     toast('Orden OFF enviada a '+z.name+'. Consultando estado real…');
   }
   await new Promise(r=>setTimeout(r,700));
@@ -770,7 +783,7 @@ async function syncExpiredDelay(){
   }catch(e){toast('La pausa venció, pero no se pudo sincronizar en la nube: '+e.message)}
   finally{delayExpirySyncBusy=false;render(1)}
 }
-function tick(){T=Date.now();if(online&&Date.now()-lastReal>5000){lastReal=Date.now();refreshRealStatus(false).catch(()=>{})}if(online&&S.delayUntil&&S.delayUntil<=Date.now())syncExpiredDelay()}
+function tick(){T=Date.now();Z.forEach(z=>{const r=R[z.id];if(r.st==='on'&&r.startedAt&&r.tot>0)r.left=Math.max(0,r.tot-(Date.now()-r.startedAt)/1000)});if(online&&Date.now()-lastReal>5000){lastReal=Date.now();refreshRealStatus(false).catch(()=>{})}if(online&&S.delayUntil&&S.delayUntil<=Date.now())syncExpiredDelay()}
 function cmd(z,on){if(!z)return;realZoneCommand(z,!!on).catch(e=>toast('No se pudo enviar la orden: '+e.message));}
 function enqueue(z,seconds,source){if(!z)return;z.sel=Math.max(1,Math.min(240,Math.ceil(Number(seconds||60)/60)));realZoneCommand(z,true).catch(e=>toast('No se pudo iniciar el riego: '+e.message));}
 function next(){return null}
