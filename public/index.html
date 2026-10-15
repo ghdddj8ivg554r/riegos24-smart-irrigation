@@ -613,7 +613,7 @@ document.addEventListener('keydown',e=>{if(e.target&&e.target.id==='rni'){if(e.k
 
 /* ---------- API real Riegos24 / Tuya ---------- */
 const API_DEFAULT='https://riegos24-smart-irrigation.onrender.com';
-let apiBusy=false, lastWeatherAt=0, serverSequence=null, realEvents=[];
+let apiBusy=false, lastWeatherAt=0, serverSequence=null;
 function apiBase(){return (S.url||API_DEFAULT).trim().replace(/\/+$/,'')}
 async function apiFetch(path,method='GET',body){
   if(!KEY.trim()) throw new Error('Ingresá API_ACCESS_KEY en Ajustes.');
