@@ -509,7 +509,11 @@ document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dat
 A.innerHTML=({home,zones:zonesPage,prog:progs,wx,hist,set:sett})[tab]()+modal();upd();
 const rx=ren!==null&&$('rni');if(rx){rx.focus();rx.select()}}
 function upd(){const n=nextRun(),c=$('clk');if(c)c.textContent='';
-Z.forEach(z=>{const r=R[z.id],a=$('cd'+z.id);if(a){const elapsed=r.startedAt?Math.max(0,Math.floor((Date.now()-r.startedAt)/1000)):0;const p=r.tot?Math.min(100,Math.round(elapsed/r.tot*100)):0;a.textContent=hms(elapsed);$('pc'+z.id).textContent=p+'%';$('pb'+z.id).style.width=p+'%';}});
+Z.forEach(z=>{const r=R[z.id],a=$('cd'+z.id);if(a){const active=r.st==='on'||r.want==='on';
+// Si Tuya confirma que la zona está encendida pero no tenemos un temporizador local, iniciar una estimación visual con la duración seleccionada.
+if(active&&(!Number.isFinite(r.tot)||r.tot<=0||!Number.isFinite(r.startedAt)||r.startedAt<=0)){r.tot=Math.max(60,Number(z.sel||5)*60);r.startedAt=Date.now();r.left=r.tot;r.approxTimer=true;writeZoneTimers();}
+const elapsed=active&&r.startedAt?Math.max(0,Math.floor((Date.now()-r.startedAt)/1000)):0;const total=active&&r.tot>0?r.tot:0;const p=total?Math.min(100,Math.round(elapsed/total*100)):0;
+a.textContent=hms(elapsed);const pc=$('pc'+z.id),pb=$('pb'+z.id);if(pc)pc.textContent=p+'%';if(pb)pb.style.width=p+'%';}});
 const s=$('sq');if(s){const act=Z.some(x=>R[x.id].want==='on');s.textContent=(!act&&!Q.length)?'Secuencia inactiva · Paso 0/0':'Secuencia '+(paused?'en pausa':'en curso')+' · Paso '+Math.min(SES.done+1,SES.tot)+'/'+SES.tot}
 const x=$('nx');if(x)x.textContent=S.locked?'Programas bloqueados por la parada de seguridad':!S.armed?'Riego automático sin activar':n?'Próximo programa: '+n.p.name+', '+fmtD(n.f)+' '+fmt(n.f)+' (en '+dur(n.f-T)+')':'Sin programas próximos'}
 function applyTheme(){const r=document.documentElement;if(S.theme==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',S.theme)}
