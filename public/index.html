@@ -121,7 +121,7 @@ label .in{margin-top:4px}
 .tm2 .i{width:16px;height:16px;color:var(--w)}
 .tm2 .pc{margin-left:auto;color:var(--m);font-weight:600}
 .pbar{height:7px;border-radius:9px;background:rgba(120,135,125,.25);overflow:hidden}
-.pbar i{display:block;height:100%;background:var(--g);width:0;transition:width .4s}
+.pbar i{display:block;height:100%;background:var(--g);width:0;transition:width .8s ease;position:relative;overflow:hidden}.pbar i:after{content:'';position:absolute;inset:0;background:linear-gradient(100deg,transparent,rgba(255,255,255,.42),transparent);transform:translateX(-100%);animation:r24-water-shimmer 2s linear infinite}@keyframes r24-water-shimmer{to{transform:translateX(100%)}}
 .zr2{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .stp{display:flex;align-items:center;gap:7px}
 .stp button{width:36px;height:36px;border-radius:10px;border:1px solid var(--bd);background:var(--c);color:var(--t);font-size:20px;line-height:1;padding:0}
