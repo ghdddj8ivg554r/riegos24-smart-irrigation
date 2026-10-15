@@ -282,7 +282,7 @@ dur=ms=>{const m=Math.max(1,Math.round(ms/6e4));return m>=60?Math.floor(m/60)+' 
 
 /* ---------- Registro y avisos ---------- */
 const zn=id=>(Z.find(x=>x.id===id)||{name:'Sistema'}).name;
-function log(z,ev,det,cat,ic,withZone){const e={t:T,zid:z?z.id:0,ev,det:det||'',cat:cat||'sistema',ic:ic||'info',zn:!!withZone};LOG.unshift(e);if(LOG.length>300)LOG.pop();return e}
+function log(z,ev,det,cat,ic,withZone){const e={t:Date.now(),zid:z?z.id:0,ev,det:det||'',cat:cat||'sistema',ic:ic||'info',zn:!!withZone};LOG.unshift(e);if(LOG.length>300)LOG.pop();try{const old=JSON.parse(localStorage.getItem('r24_history_local')||'[]');old.unshift(e);localStorage.setItem('r24_history_local',JSON.stringify(old.slice(0,150)))}catch(_){}if(KEY.trim())apiFetch('/api/history','POST',{event:e.ev,detail:e.det,zone_id:e.zid||null,ok:!['warn','err'].includes(e.ic),source:'app'}).catch(err=>console.warn('No se pudo sincronizar evento:',err.message));return e}
 function toast(m){const e=$('toast');e.textContent=m;e.style.opacity=1;clearTimeout(tt);tt=setTimeout(()=>{e.style.opacity=0},3600)}
 const note=(k,m)=>{if(S.notif[k])toast(m)};
 
@@ -705,7 +705,10 @@ async function saveRemoteConfig(){
 async function loadRemoteHistory(){
   const d=await apiFetch('/api/history');
   realEvents=(d.events||[]).map(e=>({t:Date.parse(e.created_at)||Date.now(),zid:Number(e.zone_id)||0,ev:e.event||'Evento',det:e.detail||'',cat:/riego|zona/i.test(e.event||'')?'riego':/programa/i.test(e.event||'')?'programa':/clima/i.test(e.event||'')?'clima':'sistema',ic:e.ok===false?'warn':/apag|deten/i.test(e.event||'')?'stop':'check',zn:!!e.zone_id}));
-  LOG=realEvents;render(1);
+  let local=[];try{local=JSON.parse(localStorage.getItem('r24_history_local')||'[]')}catch(_){};
+  const merged=[...realEvents];
+  for(const e of local){if(!merged.some(r=>r.ev===e.ev&&r.det===e.det&&Math.abs((r.t||0)-(e.t||0))<60000))merged.push(e)}
+  LOG=merged.sort((a,b)=>(b.t||0)-(a.t||0)).slice(0,300);render(1);
 }
 async function fetchRealWeather(){
   try{
