@@ -290,6 +290,19 @@ app.get('/api/history', async (_req, res, next) => {
     res.json({ ok: true, events: await response.json() });
   } catch (e) { next(e); }
 });
+app.post('/api/history', async (req, res, next) => {
+  try {
+    const event = String(req.body?.event || '').trim().slice(0, 120);
+    if (!event) return res.status(400).json({ ok: false, error: 'El evento es obligatorio.' });
+    const detail = String(req.body?.detail || '').slice(0, 1000);
+    const zoneId = [1, 2].includes(Number(req.body?.zone_id)) ? Number(req.body.zone_id) : null;
+    const ok = req.body?.ok !== false;
+    const source = String(req.body?.source || 'app').slice(0, 40);
+    const response = await fetch(EVENTS_URL, { method: 'POST', headers: supabaseHeaders({ Prefer: 'return=minimal' }), body: JSON.stringify({ event, detail, zone_id: zoneId, ok, source }) });
+    if (!response.ok) throw new Error('No se pudo guardar el evento en la nube (HTTP ' + response.status + ').');
+    res.json({ ok: true, saved: true });
+  } catch (e) { next(e); }
+});
 app.post('/api/sequence/start', async (req, res, next) => {
   try {
     if (sequenceState.running) return res.status(409).json({ ok: false, error: 'Ya hay una secuencia en curso', sequence: sequenceState });
