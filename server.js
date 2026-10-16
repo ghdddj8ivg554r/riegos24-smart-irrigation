@@ -22,6 +22,7 @@ let programs = [];
 let programsReady = false;
 let runtimeState = { activeRun: null, manualAutoOff: {} };
 let schedulerTickRunning = false;
+let startupReady = false;
 const firedScheduleKeys = new Set();
 
 function supabaseHeaders(extra = {}) {
@@ -395,6 +396,7 @@ app.post('/api/zones/:id/command', async (req, res, next) => {
 });
 
 async function schedulerTick() {
+  if (!startupReady) return;
   if (!programsReady) await loadPrograms();
   const expired = programs.filter(p => p.delayUntil && Date.parse(p.delayUntil) <= Date.now());
   if (expired.length) {
@@ -447,6 +449,8 @@ app.listen(port, '0.0.0.0', () => {
       await persistRuntimeState();
       if (interruptedRun) await recordEvent('Riego interrumpido por reinicio', `${interruptedRun.zoneName || 'Zona'}: el servidor reinició durante un ciclo. Se canceló por seguridad y no se reanudó automáticamente.`, interruptedRun.zoneId || null, false, 'startup');
       for (const item of interruptedManual) await recordEvent('Autoapagado manual interrumpido por reinicio', `${item.zoneName || 'Zona'}: el temporizador de memoria no sobrevive a reinicios; se enviaron órdenes OFF al iniciar.`, item.zoneId || null, false, 'startup');
+      startupReady = true;
+      await recordEvent('Planificador listo', 'Carga de configuración y recuperación segura completadas.', null, true, 'startup');
     } catch (e) { await recordEvent('Fallo de apagado al iniciar', e.message, null, false, 'startup'); }
   })();
 });
