@@ -233,8 +233,10 @@ async function runSequence(runId, items) {
     }
   }
 }
-function scheduleAutoOff(zone, minutes) {
+async function scheduleAutoOff(zone, minutes) {
   clearZoneTimer(zone.id);
+  runtimeState.manualAutoOff[String(zone.id)] = { zoneId: zone.id, zoneName: zone.name, startedAt: new Date().toISOString(), offAt: new Date(Date.now() + minutes * 60000).toISOString(), minutes };
+  await persistRuntimeState();
   const timer = setTimeout(async () => {
     try {
       await sendZoneCommand(zone, false);
@@ -246,7 +248,7 @@ function scheduleAutoOff(zone, minutes) {
   }, minutes * 60000);
   timer.unref?.();
   autoOffTimers.set(String(zone.id), timer);
-  return new Date(Date.now() + minutes * 60000).toISOString();
+  return runtimeState.manualAutoOff[String(zone.id)].offAt;
 }
 
 app.get('/api/health', (_req, res) => res.json({
@@ -383,7 +385,7 @@ app.post('/api/zones/:id/command', async (req, res, next) => {
       const otherOn = states.find(state => state.id !== zone.id && state.on);
       if (otherOn) return res.status(409).json({ ok: false, error: 'La otra zona está encendida. Apagala y confirmá el estado antes de continuar.' });
       const result = await sendZoneCommand(zone, true);
-      const autoOffAt = scheduleAutoOff(zone, minutes);
+      const autoOffAt = await scheduleAutoOff(zone, minutes);
       await recordEvent('Riego manual iniciado', zone.name + ' por ' + minutes + ' min', zone.id, true, 'manual');
       res.json({ ok: true, zone: zone.id, code: zone.code, requested: true, durationMinutes: minutes, autoOffAt, commandAccepted: result.success !== false, tuya: result, warning: 'El autoapagado del servidor no sobrevive a reinicios; confirmá el temporizador físico si está disponible.' });
     } finally { manualCommandBusy = false; }
