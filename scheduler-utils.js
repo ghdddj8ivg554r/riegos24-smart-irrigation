@@ -26,7 +26,7 @@ export function scheduleRunKey(program, nowParts) {
 
 export function normalizeProgram(program, index) {
   const time = String(program?.time || '');
-  if (!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(time)) throw new Error('Hora inválida en programa ' + (index + 1));
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new Error('Hora inválida en programa ' + (index + 1));
   const days = Array.isArray(program.days)
     ? [...new Set(program.days.map(Number).filter(day => Number.isInteger(day) && day >= 0 && day <= 6))]
     : [];
