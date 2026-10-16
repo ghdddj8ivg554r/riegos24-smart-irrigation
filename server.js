@@ -417,7 +417,13 @@ async function schedulerTick() {
     runSequence(runId, items).catch(e => console.error('Error de programa:', e.message));
   }
 }
-setInterval(() => schedulerTick().catch(e => console.error('Error del planificador:', e.message)), 15000);
+setInterval(async () => {
+  if (schedulerTickRunning) return;
+  schedulerTickRunning = true;
+  try { await schedulerTick(); }
+  catch (e) { console.error('Error del planificador:', e.message); }
+  finally { schedulerTickRunning = false; }
+}, 15000);
 app.use((error, _req, res, _next) => {
   res.status(Number(error.status) || 500).json({ ok: false, error: error.message || 'Error interno', ...(error.details ? { details: error.details } : {}) });
 });
