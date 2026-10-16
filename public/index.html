@@ -693,7 +693,7 @@ async function loadRemotePrograms(){
   const d=await apiFetch('/api/programs');
   if(!Array.isArray(d.programs))return;
   if(d.programs.length===0){await saveRemotePrograms();return;}
-  P=d.programs.map((p,i)=>({id:Number(p.id)||i+1,name:String(p.name||('Programa '+(i+1))),ic:'💧',z:{1:Number(p.durations?.[1]||0),2:Number(p.durations?.[2]||0)},days:Array.isArray(p.days)?p.days:[],time:p.time||'07:00',on:p.enabled===true,delayUntil:p.delayUntil||null}));
+  P=d.programs.map((p,i)=>({id:Number(p.id)||i+1,name:String(p.name||('Programa '+(i+1))),ic:'💧',z:{1:Number(p.durations?.[1]||0),2:Number(p.durations?.[2]||0)},days:Array.isArray(p.days)?p.days:[],time:p.time||'07:00',on:p.enabled===true,delayUntil:p.delayUntil||null,weatherRetryUntil:p.weatherRetryUntil||null,weatherRetryKey:p.weatherRetryKey||null}));
   const activeDelays=P.map(p=>Date.parse(p.delayUntil||'')).filter(t=>Number.isFinite(t)&&t>Date.now());
   const locallySavedDelayUntil=S.delayUntil;
   S.delayUntil=activeDelays.length?Math.max(...activeDelays):0;
@@ -705,7 +705,7 @@ async function loadRemotePrograms(){
 async function saveRemotePrograms(){
   if(!KEY.trim())return;
   const globalDelay=S.delayUntil>Date.now()?new Date(S.delayUntil).toISOString():null;
-  const programs=P.map((p,i)=>({id:Number(p.id)||i+1,name:p.name,time:p.time,days:p.days,durations:{1:Number(p.z?.[1]||0),2:Number(p.z?.[2]||0)},enabled:p.on===true,delayUntil:globalDelay||p.delayUntil||null}));
+  const programs=P.map((p,i)=>({id:Number(p.id)||i+1,name:p.name,time:p.time,days:p.days,durations:{1:Number(p.z?.[1]||0),2:Number(p.z?.[2]||0)},enabled:p.on===true,delayUntil:globalDelay||p.delayUntil||null,weatherRetryUntil:p.weatherRetryUntil||null,weatherRetryKey:p.weatherRetryKey||null}));
   const d=await apiFetch('/api/programs','PUT',{programs});
   if(!d.saved)throw new Error('El servidor no confirmó el guardado de programas.');
 }
