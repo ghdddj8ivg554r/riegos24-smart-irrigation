@@ -261,7 +261,7 @@ let P=[
 {id:3,name:'Huerta y plantas',ic:'🌱',z:{1:15,2:10},days:[2,4,6],time:'19:30',on:false},
 {id:4,name:'Solo huerta',ic:'🌱',z:{2:20},days:[0],time:'07:00',on:false}];
 const KS='r24v2';
-function save(){try{localStorage.setItem(KS,JSON.stringify({S:Object.assign({},S,{delayUntil:0,delayH:0}),Z:Z.map(z=>Object.assign({},z)),P}))}catch(_){}}
+function save(){try{localStorage.setItem(KS,JSON.stringify({S,Z:Z.map(z=>Object.assign({},z)),P}))}catch(_){}}
 function load(){try{const d=JSON.parse(localStorage.getItem(KS)||'null');if(!d)return;
 if(d.S&&typeof d.S==='object')Object.keys(S).forEach(k=>{if(k in d.S&&typeof d.S[k]===typeof S[k]){if(S[k]&&typeof S[k]==='object')Object.assign(S[k],d.S[k]);else S[k]=d.S[k]}});
 if(Array.isArray(d.Z))d.Z.forEach(x=>{const z=Z.find(q=>q.id===x.id);if(z&&x&&typeof x==='object')Object.assign(z,x)});
@@ -553,8 +553,8 @@ case 'th':S.theme=k;applyTheme();break;
 case 'eye':showKey=!showKey;break;
 case 'keyclear':KEY='';try{localStorage.removeItem('r24_api_access_key')}catch(_){}conn={st:'idle',msg:'Clave guardada eliminada de este dispositivo.'};render(1);return;
 case 'conn':checkConn();return;
-case 'dl':S.delayH=+k;break;
-case 'dlap':if(S.delayH>0){if(!KEY.trim()){toast('Ingresá API_ACCESS_KEY en Ajustes para guardar la pausa en la nube.');break}S.delayUntil=Date.now()+S.delayH*36e5;P.forEach(q=>q.delayUntil=new Date(S.delayUntil).toISOString());saveRemotePrograms().then(()=>{save();log(null,'Retraso por clima guardado en la nube','Pausa de '+S.delayH+' horas; vence '+new Date(S.delayUntil).toLocaleString('es-AR'),'clima','cloud');toast('Pausa guardada en la nube por '+S.delayH+' horas. Los horarios se omiten durante la pausa y se reanudan automáticamente al vencer.');render(1)}).catch(e=>toast('No se pudo guardar la pausa: '+e.message))}else{toast('Elegí 24, 48 o 72 horas antes de aplicar la pausa.')}break;
+case 'dl':S.delayH=+k;save();break;
+case 'dlap':if(!KEY.trim()){toast('Ingresá API_ACCESS_KEY en Ajustes para guardar la pausa en la nube.');break}if(S.delayH>0){S.delayUntil=Date.now()+S.delayH*36e5;P.forEach(q=>q.delayUntil=new Date(S.delayUntil).toISOString());saveRemotePrograms().then(()=>{save();log(null,'Retraso global guardado en la nube','Todos los programas quedan pausados hasta '+new Date(S.delayUntil).toLocaleString('es-AR'),'clima','cloud');toast('Retraso guardado en la nube para todos los programas, incluidos los nuevos mientras dure la pausa.');render(1)}).catch(e=>toast('No se pudo guardar la pausa: '+e.message))}else{S.delayUntil=0;P.forEach(q=>q.delayUntil=null);saveRemotePrograms().then(()=>{save();log(null,'Retraso global quitado','Todos los programas vuelven a quedar habilitados, sujetos a la validación climática automática.','clima','cloud');toast('Pausa quitada en la nube para todos los programas.');render(1)}).catch(e=>toast('No se pudo quitar la pausa: '+e.message))}break;
 case 'dlclr':if(!KEY.trim()){toast('Ingresá API_ACCESS_KEY en Ajustes para quitar la pausa en la nube.');break}S.delayUntil=0;S.delayH=0;P.forEach(q=>q.delayUntil=null);saveRemotePrograms().then(()=>{save();log(null,'Retraso climático quitado','Los próximos horarios quedan habilitados.','clima','cloud');toast('Pausa quitada en la nube. Los próximos horarios quedan habilitados.');render(1)}).catch(e=>toast('No se pudo quitar la pausa: '+e.message));break;
 case 'wxr':fetchRealWeather();return;
 case 'pf':pf=k;break;
@@ -696,13 +696,14 @@ async function loadRemotePrograms(){
   P=d.programs.map((p,i)=>({id:Number(p.id)||i+1,name:String(p.name||('Programa '+(i+1))),ic:'💧',z:{1:Number(p.durations?.[1]||0),2:Number(p.durations?.[2]||0)},days:Array.isArray(p.days)?p.days:[],time:p.time||'07:00',on:p.enabled===true,delayUntil:p.delayUntil||null}));
   const activeDelays=P.map(p=>Date.parse(p.delayUntil||'')).filter(t=>Number.isFinite(t)&&t>Date.now());
   S.delayUntil=activeDelays.length?Math.max(...activeDelays):0;
-  S.delayH=S.delayUntil?Math.max(1,Math.ceil((S.delayUntil-Date.now())/36e5)):0;
+  S.delayH=S.delayUntil?Math.min(72,Math.max(1,Math.ceil((S.delayUntil-Date.now())/36e5))):0;
   if(!P.length)P=[];
   S.armed=P.some(p=>p.on);save();
 }
 async function saveRemotePrograms(){
   if(!KEY.trim())return;
-  const programs=P.map((p,i)=>({id:Number(p.id)||i+1,name:p.name,time:p.time,days:p.days,durations:{1:Number(p.z?.[1]||0),2:Number(p.z?.[2]||0)},enabled:p.on===true,delayUntil:p.delayUntil||null}));
+  const globalDelay=S.delayUntil>Date.now()?new Date(S.delayUntil).toISOString():null;
+  const programs=P.map((p,i)=>({id:Number(p.id)||i+1,name:p.name,time:p.time,days:p.days,durations:{1:Number(p.z?.[1]||0),2:Number(p.z?.[2]||0)},enabled:p.on===true,delayUntil:globalDelay||p.delayUntil||null}));
   const d=await apiFetch('/api/programs','PUT',{programs});
   if(!d.saved)throw new Error('El servidor no confirmó el guardado de programas.');
 }
