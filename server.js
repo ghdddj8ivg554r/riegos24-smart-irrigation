@@ -376,26 +376,68 @@ app.post('/api/zones/:id/command', async (req, res, next) => {
 
 async function schedulerTick() {
   if (!programsReady) await loadPrograms();
-  const expired = programs.filter(p => p.delayUntil && Date.parse(p.delayUntil) <= Date.now());
+  const nowMs = Date.now();
+  const expired = programs.filter(p => p.delayUntil && Date.parse(p.delayUntil) <= nowMs);
   if (expired.length) {
     expired.forEach(p => { p.delayUntil = null; });
     try { await persistPrograms(); await recordEvent('Retraso climático finalizado', 'La pausa venció; los próximos horarios vuelven a quedar habilitados.', null, true, 'scheduler'); }
     catch (e) { console.error('No se pudo limpiar la pausa vencida en la nube:', e.message); }
   }
+  let retryChanged = false;
+  for (const p of programs) {
+    if (p.weatherRetryUntil && Date.parse(p.weatherRetryUntil) <= nowMs) {
+      p.weatherRetryUntil = null; p.weatherRetryKey = null; retryChanged = true;
+      await recordEvent('Reintento climático vencido', p.name + ': no se pudo regar dentro de las 6 horas posteriores al horario original.', null, false, 'weather');
+    }
+  }
+  if (retryChanged) {
+    try { await persistPrograms(); } catch (e) { console.error('No se pudo guardar la expiración del reintento climático:', e.message); }
+  }
   const now = localScheduleParts();
-  const due = programs.filter(p => p.enabled && p.days.includes(now.day) && p.time === now.time && (!p.delayUntil || Date.parse(p.delayUntil) <= Date.now()));
+  const due = programs.filter(p => p.enabled &&
+    (!p.delayUntil || Date.parse(p.delayUntil) <= nowMs) &&
+    ((p.days.includes(now.day) && p.time === now.time) ||
+      (p.weatherRetryUntil && Date.parse(p.weatherRetryUntil) > nowMs && p.weatherRetryKey)));
   for (const p of due) {
-    const key = now.date + ' ' + p.id + ' ' + p.time;
-    if (firedScheduleKeys.has(key)) continue;
-    firedScheduleKeys.add(key);
-    if (firedScheduleKeys.size > 500) firedScheduleKeys.clear();
-    if (sequenceState.running || manualCommandBusy) { await recordEvent('Programa omitido', p.name + ': hay riego activo', null, false, 'scheduler'); continue; }
+    const scheduledKey = p.weatherRetryKey || (now.date + ' ' + p.id + ' ' + p.time);
+    if (firedScheduleKeys.has(scheduledKey)) continue;
+    if (sequenceState.running || manualCommandBusy) {
+      firedScheduleKeys.add(scheduledKey);
+      await recordEvent('Programa omitido', p.name + ': hay riego activo', null, false, 'scheduler');
+      continue;
+    }
     let wx;
     try { wx = await getWeatherSafety(); }
-    catch (e) { await recordEvent('Programa pospuesto', p.name + ': clima sin verificar; ' + e.message, null, false, 'weather'); continue; }
-    if (wx.blocked) { await recordEvent('Programa pospuesto por clima', p.name + ': lluvia ' + wx.rainMm.toFixed(1) + ' mm/4h; viento ' + wx.windKmh + ' km/h', null, true, 'weather'); continue; }
+    catch (e) {
+      if (!p.weatherRetryUntil) {
+        p.weatherRetryKey = scheduledKey;
+        p.weatherRetryUntil = new Date(nowMs + 6 * 60 * 60 * 1000).toISOString();
+        try { await persistPrograms(); } catch (saveError) { console.error('No se pudo guardar el reintento climático:', saveError.message); }
+        await recordEvent('Programa pospuesto', p.name + ': clima sin verificar; se reintentará hasta 6 horas después del horario original. ' + e.message, null, false, 'weather');
+      }
+      continue;
+    }
+    if (wx.blocked) {
+      if (!p.weatherRetryUntil) {
+        p.weatherRetryKey = scheduledKey;
+        p.weatherRetryUntil = new Date(nowMs + 6 * 60 * 60 * 1000).toISOString();
+        try { await persistPrograms(); } catch (saveError) { console.error('No se pudo guardar el reintento climático:', saveError.message); }
+        await recordEvent('Programa pospuesto por clima', p.name + ': lluvia ' + wx.rainMm.toFixed(1) + ' mm/4h; viento ' + wx.windKmh + ' km/h. Se reintentará durante las próximas 6 horas.', null, true, 'weather');
+      }
+      continue;
+    }
     const items = [1, 2].map(id => ({ id, minutes: Number(p.durations?.[id] || 0) })).filter(x => x.minutes > 0);
-    if (!items.length) { console.log('Programa sin duraciones; omitido:', p.name); continue; }
+    if (!items.length) {
+      firedScheduleKeys.add(scheduledKey);
+      p.weatherRetryUntil = null; p.weatherRetryKey = null;
+      try { await persistPrograms(); } catch (e) { console.error('No se pudo limpiar reintento de programa vacío:', e.message); }
+      console.log('Programa sin duraciones; omitido:', p.name);
+      continue;
+    }
+    firedScheduleKeys.add(scheduledKey);
+    p.weatherRetryUntil = null; p.weatherRetryKey = null;
+    try { await persistPrograms(); } catch (e) { console.error('No se pudo limpiar el reintento antes de regar:', e.message); }
+    if (firedScheduleKeys.size > 500) firedScheduleKeys.clear();
     const runId = sequenceState.runId + 1;
     await recordEvent('Programa horario iniciado', p.name + ' · ' + now.date + ' ' + now.time + ' · lluvia ' + wx.rainMm.toFixed(1) + ' mm/4h · viento ' + wx.windKmh + ' km/h', null, true, 'scheduler');
     runSequence(runId, items).catch(e => console.error('Error de programa:', e.message));
