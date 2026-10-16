@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
 import crypto from 'node:crypto';
+import { isProgramDue, localScheduleParts, normalizeProgram, scheduleRunKey } from './scheduler-utils.js';
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -80,13 +81,6 @@ async function getWeatherSafety() {
   const windKmh = Number(data.current.wind_speed_10m || 0);
   return { rainMm, windKmh, rainLimitMm: RAIN_LIMIT_MM, windLimitKmh: WIND_LIMIT_KMH, blocked: (RAIN_LIMIT_MM > 0 && rainMm >= RAIN_LIMIT_MM) || windKmh >= WIND_LIMIT_KMH };
 }
-function localScheduleParts(date = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
-  const v = Object.fromEntries(parts.map(p => [p.type, p.value]));
-  const days = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
-  return { day: days[v.weekday], time: v.hour + ':' + v.minute, date: v.year + '-' + v.month + '-' + v.day };
-}
-
 const zones = {
   '1': { id: 1, name: 'Patio trasero', code: process.env.ZONE_1_CODE || 'switch_1' },
   '2': { id: 2, name: 'Patio delantero', code: process.env.ZONE_2_CODE || 'switch_2' },
@@ -263,19 +257,7 @@ app.put('/api/programs', async (req, res, next) => {
   try {
     const incoming = req.body?.programs;
     if (!Array.isArray(incoming) || incoming.length > 50) return res.status(400).json({ ok: false, error: 'La lista de programas no es válida (máximo 50).' });
-    const clean = incoming.map((p, i) => {
-      const time = String(p.time || '');
-      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw Object.assign(new Error('Hora inválida en programa ' + (i + 1)), { status: 400 });
-      const days = Array.isArray(p.days) ? [...new Set(p.days.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6))] : [];
-      const durations = {};
-      for (const id of [1, 2]) {
-        const m = Number(p.durations?.[id] ?? 0);
-        if (!Number.isFinite(m) || m < 0 || m > 240) throw Object.assign(new Error('Duración inválida en programa ' + (i + 1)), { status: 400 });
-        durations[id] = Math.floor(m);
-      }
-      const delayUntil = p.delayUntil && Number.isFinite(Date.parse(p.delayUntil)) ? new Date(p.delayUntil).toISOString() : null;
-      return { id: Number(p.id) || i + 1, name: String(p.name || ('Programa ' + (i + 1))).slice(0, 80), time, days, durations, enabled: p.enabled === true, delayUntil };
-    });
+    const clean = incoming.map((p, i) => normalizeProgram(p, i));
     programs = clean;
     await persistPrograms();
     programsReady = true;
@@ -383,9 +365,9 @@ async function schedulerTick() {
     catch (e) { console.error('No se pudo limpiar la pausa vencida en la nube:', e.message); }
   }
   const now = localScheduleParts();
-  const due = programs.filter(p => p.enabled && p.days.includes(now.day) && p.time === now.time && (!p.delayUntil || Date.parse(p.delayUntil) <= Date.now()));
+  const due = programs.filter(p => isProgramDue(p, now, Date.now()));
   for (const p of due) {
-    const key = now.date + ' ' + p.id + ' ' + p.time;
+    const key = scheduleRunKey(p, now);
     if (firedScheduleKeys.has(key)) continue;
     firedScheduleKeys.add(key);
     if (firedScheduleKeys.size > 500) firedScheduleKeys.clear();
