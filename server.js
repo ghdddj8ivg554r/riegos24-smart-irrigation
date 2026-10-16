@@ -71,14 +71,40 @@ async function waitForZoneOff(zoneId, attempts = 5) {
   return states;
 }
 async function getWeatherSafety() {
-  const url = 'https://api.open-meteo.com/v1/forecast?latitude=-27.33&longitude=-58.57&current=precipitation,wind_speed_10m&hourly=precipitation&forecast_days=1&forecast_hours=4&timezone=America%2FArgentina%2FCordoba';
-  const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  const url = 'https://api.open-meteo.com/v1/forecast?latitude=-27.33&longitude=-58.57&current=precipitation,wind_speed_10m,temperature_2m,relative_humidity_2m,cloud_cover&hourly=precipitation,temperature_2m,relative_humidity_2m,cloud_cover&past_days=3&forecast_days=2&timezone=America%2FArgentina%2FCordoba';
+  const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
   if (!response.ok) throw new Error('Clima no disponible (HTTP ' + response.status + ')');
   const data = await response.json();
-  if (!data.current || !Array.isArray(data.hourly?.precipitation)) throw new Error('Pronóstico incompleto');
-  const rainMm = data.hourly.precipitation.slice(0, 4).reduce((sum, n) => sum + Number(n || 0), 0);
+  const h = data.hourly;
+  if (!data.current || !Array.isArray(h?.time) || !Array.isArray(h?.precipitation)) throw new Error('Pronóstico incompleto');
+  const now = Date.now();
+  const rainNext4h = h.time.reduce((sum, stamp, i) => {
+    const t = Date.parse(stamp);
+    return t >= now && t < now + 4 * 3600000 ? sum + Number(h.precipitation[i] || 0) : sum;
+  }, 0);
+  const rainLast72h = h.time.reduce((sum, stamp, i) => {
+    const t = Date.parse(stamp);
+    return t <= now && t > now - 72 * 3600000 ? sum + Number(h.precipitation[i] || 0) : sum;
+  }, 0);
   const windKmh = Number(data.current.wind_speed_10m || 0);
-  return { rainMm, windKmh, rainLimitMm: RAIN_LIMIT_MM, windLimitKmh: WIND_LIMIT_KMH, blocked: (RAIN_LIMIT_MM > 0 && rainMm >= RAIN_LIMIT_MM) || windKmh >= WIND_LIMIT_KMH };
+  const tempC = Number(data.current.temperature_2m ?? 20);
+  const humidity = Number(data.current.relative_humidity_2m ?? 60);
+  const cloud = Number(data.current.cloud_cover ?? 30);
+  let factor = 1;
+  const reasons = [];
+  if (humidity >= 85 && cloud >= 75) { factor = 0.7; reasons.push('humedad alta y cielo muy cubierto'); }
+  else if (humidity >= 75 && cloud >= 60) { factor = 0.8; reasons.push('humedad alta y nubosidad'); }
+  else if (cloud >= 85) { factor = 0.85; reasons.push('nubosidad persistente'); }
+  if (tempC >= 32 && humidity < 45 && cloud < 35) { factor = Math.max(factor, 1.25); reasons.push('calor fuerte y aire seco'); }
+  else if (tempC >= 29 && humidity < 55 && cloud < 45) { factor = Math.max(factor, 1.15); reasons.push('calor y humedad baja'); }
+  const blockedRain = (RAIN_LIMIT_MM > 0 && rainNext4h >= RAIN_LIMIT_MM) || rainLast72h >= 15;
+  const blocked = blockedRain || windKmh >= WIND_LIMIT_KMH;
+  return {
+    rainMm: rainNext4h, rainLast72hMm: Math.round(rainLast72h * 10) / 10,
+    windKmh, tempC, humidity, cloud, factor, reasons,
+    rainLimitMm: RAIN_LIMIT_MM, windLimitKmh: WIND_LIMIT_KMH, blocked,
+    blockReason: windKmh >= WIND_LIMIT_KMH ? 'viento excesivo' : rainLast72h >= 15 ? 'lluvia acumulada en 72 horas' : rainNext4h >= RAIN_LIMIT_MM && RAIN_LIMIT_MM > 0 ? 'lluvia prevista' : null
+  };
 }
 function localScheduleParts(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
@@ -426,7 +452,13 @@ async function schedulerTick() {
       }
       continue;
     }
-    const items = [1, 2].map(id => ({ id, minutes: Number(p.durations?.[id] || 0) })).filter(x => x.minutes > 0);
+    const baseItems = [1, 2].map(id => ({ id, minutes: Number(p.durations?.[id] || 0) })).filter(x => x.minutes > 0);
+    const items = baseItems.map(item => ({
+      ...item,
+      baseMinutes: item.minutes,
+      minutes: Math.max(1, Math.min(240, Math.round(item.minutes * wx.factor)))
+    }));
+    const climateSummary = 'Lluvia prevista 4 h: ' + wx.rainMm.toFixed(1) + ' mm; lluvia últimas 72 h: ' + wx.rainLast72hMm.toFixed(1) + ' mm; temperatura: ' + wx.tempC + ' °C; humedad: ' + wx.humidity + '%; nubosidad: ' + wx.cloud + '%; viento: ' + wx.windKmh + ' km/h; ajuste: ' + Math.round((wx.factor - 1) * 100) + '% (' + (wx.reasons.join(', ') || 'sin ajuste') + '). Duraciones: ' + items.map(x => 'zona ' + x.id + ' ' + x.baseMinutes + '→' + x.minutes + ' min').join(', ');
     if (!items.length) {
       firedScheduleKeys.add(scheduledKey);
       p.weatherRetryUntil = null; p.weatherRetryKey = null;
@@ -439,7 +471,7 @@ async function schedulerTick() {
     try { await persistPrograms(); } catch (e) { console.error('No se pudo limpiar el reintento antes de regar:', e.message); }
     if (firedScheduleKeys.size > 500) firedScheduleKeys.clear();
     const runId = sequenceState.runId + 1;
-    await recordEvent('Programa horario iniciado', p.name + ' · ' + now.date + ' ' + now.time + ' · lluvia ' + wx.rainMm.toFixed(1) + ' mm/4h · viento ' + wx.windKmh + ' km/h', null, true, 'scheduler');
+    await recordEvent('Programa horario iniciado', p.name + ' · ' + now.date + ' ' + now.time + ' · ' + climateSummary, null, true, 'scheduler');
     runSequence(runId, items).catch(e => console.error('Error de programa:', e.message));
   }
 }
