@@ -200,23 +200,31 @@ async function runSequence(runId, items) {
       }
       const afterOff = await getDeviceZoneStates();
       if (afterOff.some(state => !state.known || state.on)) throw new Error('No se pudo confirmar OFF en ambas zonas; se cancela el riego.');
+      const endAt = Date.now() + item.minutes * 60000;
+      runtimeState.activeRun = { runId, zoneId: zone.id, zoneName: zone.name, phase: 'watering', startedAt: new Date().toISOString(), endAt: new Date(endAt).toISOString(), minutes: item.minutes };
+      await persistRuntimeState();
       await sendZoneCommand(zone, true);
       // La secuencia gestiona su propio apagado; no crear un segundo temporizador concurrente.
       await recordEvent('Zona encendida', zone.name + ' por ' + item.minutes + ' min', zone.id, true, 'sequence');
-      const endAt = Date.now() + item.minutes * 60000;
       while (Date.now() < endAt && sequenceState.runId === runId) await sleep(Math.min(1000, endAt - Date.now()));
       if (sequenceState.runId !== runId) return;
       clearZoneTimer(zone.id);
       await sendZoneCommand(zone, false);
       const confirmedOff = await waitForZoneOff(zone.id, 5);
       if (confirmedOff.some(state => !state.known) || confirmedOff.some(state => state.id === zone.id && state.on)) throw new Error('No se confirmó el apagado de ' + zone.name + ' después de 5 consultas');
+      runtimeState.activeRun = null;
+      await persistRuntimeState();
       await recordEvent('Zona apagada', zone.name, zone.id, true, 'sequence');
     }
+    runtimeState.activeRun = null;
+    await persistRuntimeState();
     if (sequenceState.runId === runId) {
       sequenceState.running = false; sequenceState.currentZone = null; sequenceState.message = 'Ciclo secuencial finalizado';
     }
   } catch (e) {
     sequenceState.running = false; sequenceState.message = 'Error en secuencia: ' + e.message;
+    runtimeState.activeRun = null;
+    try { await persistRuntimeState(); } catch (persistError) { console.error('No se pudo guardar el estado final de la secuencia:', persistError.message); }
     await recordEvent('Fallo de secuencia', e.message, null, false, 'sequence');
     console.error('Fallo en secuencia:', e.message);
     for (const zone of Object.values(zones)) {
