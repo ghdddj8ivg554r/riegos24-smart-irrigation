@@ -402,7 +402,7 @@ async function schedulerTick() {
     try { await persistPrograms(); await recordEvent('Retraso climático finalizado', 'La pausa venció; los próximos horarios vuelven a quedar habilitados.', null, true, 'scheduler'); }
     catch (e) { console.error('No se pudo limpiar la pausa vencida en la nube:', e.message); }
   }
-  const now = localScheduleParts();
+  const now = localScheduleParts(new Date(), TZ);
   const due = programs.filter(p => isProgramDue(p, now, Date.now()));
   for (const p of due) {
     const key = scheduleRunKey(p, now);
