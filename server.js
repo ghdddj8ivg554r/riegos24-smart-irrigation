@@ -255,7 +255,10 @@ async function scheduleAutoOff(zone, minutes) {
 app.get('/api/health', (_req, res) => res.json({
   ok: true, app: 'Riegos24 API', mode: 'tuya-cloud',
   configured: Boolean(API_ACCESS_KEY && process.env.TUYA_ACCESS_ID && process.env.TUYA_ACCESS_SECRET && deviceId),
+  startupReady,
+  timezone: TZ,
   programsStorage: Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) ? 'supabase' : 'not_configured',
+  runtimeStateStorage: Boolean(RUNTIME_URL && SUPABASE_SERVICE_ROLE_KEY) ? 'supabase' : 'not_configured',
 }));
 app.get('/api/zones', (_req, res) => res.json({
   zones: Object.values(zones).map(({ id, name, code }) => ({ id, name, code })),
