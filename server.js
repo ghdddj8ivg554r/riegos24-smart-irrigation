@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
 import crypto from 'node:crypto';
+import { isProgramDue, localScheduleParts, normalizeProgram, scheduleRunKey } from './scheduler-utils.js';
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -13,11 +14,15 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const PROGRAMS_URL = SUPABASE_URL ? SUPABASE_URL + '/rest/v1/riegos24_programs' : '';
 const EVENTS_URL = SUPABASE_URL ? SUPABASE_URL + '/rest/v1/riegos24_events' : '';
 const CONFIG_URL = SUPABASE_URL ? SUPABASE_URL + '/rest/v1/riegos24_config' : '';
+const RUNTIME_URL = SUPABASE_URL ? SUPABASE_URL + '/rest/v1/riegos24_runtime' : '';
 const RAIN_LIMIT_MM = Math.max(0, Number(process.env.WEATHER_RAIN_LIMIT_MM || 2));
 const WIND_LIMIT_KMH = Math.max(1, Number(process.env.WEATHER_WIND_LIMIT_KMH || 35));
 const TZ = process.env.SCHEDULE_TIMEZONE || 'America/Argentina/Cordoba';
 let programs = [];
 let programsReady = false;
+let runtimeState = { activeRun: null, manualAutoOff: {} };
+let schedulerTickRunning = false;
+let startupReady = false;
 const firedScheduleKeys = new Set();
 
 function supabaseHeaders(extra = {}) {
@@ -42,6 +47,25 @@ async function loadPrograms() {
   const rows = await response.json();
   programs = Array.isArray(rows?.[0]?.programs) ? rows[0].programs : [];
   programsReady = true;
+}
+async function loadRuntimeState() {
+  const response = await fetch(RUNTIME_URL + '?id=eq.main&select=state', {
+    headers: supabaseHeaders({ Accept: 'application/json' }),
+  });
+  if (!response.ok) throw new Error('No se pudo cargar el estado de ejecución (HTTP ' + response.status + ').');
+  const rows = await response.json();
+  const state = rows?.[0]?.state;
+  runtimeState = state && typeof state === 'object'
+    ? { activeRun: state.activeRun || null, manualAutoOff: state.manualAutoOff || {} }
+    : { activeRun: null, manualAutoOff: {} };
+}
+async function persistRuntimeState() {
+  const response = await fetch(RUNTIME_URL + '?on_conflict=id', {
+    method: 'POST',
+    headers: supabaseHeaders({ Prefer: 'resolution=merge-duplicates,return=minimal' }),
+    body: JSON.stringify({ id: 'main', state: runtimeState, updated_at: new Date().toISOString() }),
+  });
+  if (!response.ok) throw new Error('No se pudo guardar el estado de ejecución (HTTP ' + response.status + ').');
 }
 async function recordEvent(event, detail = '', zoneId = null, ok = true, source = 'server') {
   console.log(`[${ok ? 'OK' : 'ERROR'}] ${event}: ${detail}`);
@@ -80,13 +104,6 @@ async function getWeatherSafety() {
   const windKmh = Number(data.current.wind_speed_10m || 0);
   return { rainMm, windKmh, rainLimitMm: RAIN_LIMIT_MM, windLimitKmh: WIND_LIMIT_KMH, blocked: (RAIN_LIMIT_MM > 0 && rainMm >= RAIN_LIMIT_MM) || windKmh >= WIND_LIMIT_KMH };
 }
-function localScheduleParts(date = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
-  const v = Object.fromEntries(parts.map(p => [p.type, p.value]));
-  const days = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
-  return { day: days[v.weekday], time: v.hour + ':' + v.minute, date: v.year + '-' + v.month + '-' + v.day };
-}
-
 const zones = {
   '1': { id: 1, name: 'Patio trasero', code: process.env.ZONE_1_CODE || 'switch_1' },
   '2': { id: 2, name: 'Patio delantero', code: process.env.ZONE_2_CODE || 'switch_2' },
@@ -184,23 +201,31 @@ async function runSequence(runId, items) {
       }
       const afterOff = await getDeviceZoneStates();
       if (afterOff.some(state => !state.known || state.on)) throw new Error('No se pudo confirmar OFF en ambas zonas; se cancela el riego.');
+      const endAt = Date.now() + item.minutes * 60000;
+      runtimeState.activeRun = { runId, zoneId: zone.id, zoneName: zone.name, phase: 'watering', startedAt: new Date().toISOString(), endAt: new Date(endAt).toISOString(), minutes: item.minutes };
+      await persistRuntimeState();
       await sendZoneCommand(zone, true);
       // La secuencia gestiona su propio apagado; no crear un segundo temporizador concurrente.
       await recordEvent('Zona encendida', zone.name + ' por ' + item.minutes + ' min', zone.id, true, 'sequence');
-      const endAt = Date.now() + item.minutes * 60000;
       while (Date.now() < endAt && sequenceState.runId === runId) await sleep(Math.min(1000, endAt - Date.now()));
       if (sequenceState.runId !== runId) return;
       clearZoneTimer(zone.id);
       await sendZoneCommand(zone, false);
       const confirmedOff = await waitForZoneOff(zone.id, 5);
       if (confirmedOff.some(state => !state.known) || confirmedOff.some(state => state.id === zone.id && state.on)) throw new Error('No se confirmó el apagado de ' + zone.name + ' después de 5 consultas');
+      runtimeState.activeRun = null;
+      await persistRuntimeState();
       await recordEvent('Zona apagada', zone.name, zone.id, true, 'sequence');
     }
+    runtimeState.activeRun = null;
+    await persistRuntimeState();
     if (sequenceState.runId === runId) {
       sequenceState.running = false; sequenceState.currentZone = null; sequenceState.message = 'Ciclo secuencial finalizado';
     }
   } catch (e) {
     sequenceState.running = false; sequenceState.message = 'Error en secuencia: ' + e.message;
+    runtimeState.activeRun = null;
+    try { await persistRuntimeState(); } catch (persistError) { console.error('No se pudo guardar el estado final de la secuencia:', persistError.message); }
     await recordEvent('Fallo de secuencia', e.message, null, false, 'sequence');
     console.error('Fallo en secuencia:', e.message);
     for (const zone of Object.values(zones)) {
@@ -209,22 +234,31 @@ async function runSequence(runId, items) {
     }
   }
 }
-function scheduleAutoOff(zone, minutes) {
+async function scheduleAutoOff(zone, minutes) {
   clearZoneTimer(zone.id);
+  runtimeState.manualAutoOff[String(zone.id)] = { zoneId: zone.id, zoneName: zone.name, startedAt: new Date().toISOString(), offAt: new Date(Date.now() + minutes * 60000).toISOString(), minutes };
+  await persistRuntimeState();
   const timer = setTimeout(async () => {
-    try { await sendZoneCommand(zone, false); console.log(`Auto-OFF enviado a zona ${zone.id} (${zone.name})`); }
-    catch (e) { console.error(`FALLO auto-OFF zona ${zone.id}: ${e.message}`); }
+    try {
+      await sendZoneCommand(zone, false);
+      console.log(`Auto-OFF enviado a zona ${zone.id} (${zone.name})`);
+      delete runtimeState.manualAutoOff[String(zone.id)];
+      await persistRuntimeState();
+    } catch (e) { console.error(`FALLO auto-OFF zona ${zone.id}: ${e.message}`); }
     finally { autoOffTimers.delete(String(zone.id)); }
   }, minutes * 60000);
   timer.unref?.();
   autoOffTimers.set(String(zone.id), timer);
-  return new Date(Date.now() + minutes * 60000).toISOString();
+  return runtimeState.manualAutoOff[String(zone.id)].offAt;
 }
 
 app.get('/api/health', (_req, res) => res.json({
   ok: true, app: 'Riegos24 API', mode: 'tuya-cloud',
   configured: Boolean(API_ACCESS_KEY && process.env.TUYA_ACCESS_ID && process.env.TUYA_ACCESS_SECRET && deviceId),
+  startupReady,
+  timezone: TZ,
   programsStorage: Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) ? 'supabase' : 'not_configured',
+  runtimeStateStorage: Boolean(RUNTIME_URL && SUPABASE_SERVICE_ROLE_KEY) ? 'supabase' : 'not_configured',
 }));
 app.get('/api/zones', (_req, res) => res.json({
   zones: Object.values(zones).map(({ id, name, code }) => ({ id, name, code })),
@@ -263,19 +297,7 @@ app.put('/api/programs', async (req, res, next) => {
   try {
     const incoming = req.body?.programs;
     if (!Array.isArray(incoming) || incoming.length > 50) return res.status(400).json({ ok: false, error: 'La lista de programas no es válida (máximo 50).' });
-    const clean = incoming.map((p, i) => {
-      const time = String(p.time || '');
-      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw Object.assign(new Error('Hora inválida en programa ' + (i + 1)), { status: 400 });
-      const days = Array.isArray(p.days) ? [...new Set(p.days.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6))] : [];
-      const durations = {};
-      for (const id of [1, 2]) {
-        const m = Number(p.durations?.[id] ?? 0);
-        if (!Number.isFinite(m) || m < 0 || m > 240) throw Object.assign(new Error('Duración inválida en programa ' + (i + 1)), { status: 400 });
-        durations[id] = Math.floor(m);
-      }
-      const delayUntil = p.delayUntil && Number.isFinite(Date.parse(p.delayUntil)) ? new Date(p.delayUntil).toISOString() : null;
-      return { id: Number(p.id) || i + 1, name: String(p.name || ('Programa ' + (i + 1))).slice(0, 80), time, days, durations, enabled: p.enabled === true, delayUntil };
-    });
+    const clean = incoming.map((p, i) => normalizeProgram(p, i));
     programs = clean;
     await persistPrograms();
     programsReady = true;
@@ -329,6 +351,9 @@ app.post('/api/sequence/stop', async (_req, res, next) => {
       try { await sendZoneCommand(zone, false); results.push({ zone: zone.id, ok: true }); }
       catch (e) { results.push({ zone: zone.id, ok: false, error: e.message }); }
     }
+    runtimeState.activeRun = null;
+    runtimeState.manualAutoOff = {};
+    await persistRuntimeState();
     res.json({ ok: true, stopped: true, results, warning: results.some(x => !x.ok) ? 'No se pudo enviar OFF a todas las zonas.' : undefined });
   } catch (e) { next(e); }
 });
@@ -355,6 +380,8 @@ app.post('/api/zones/:id/command', async (req, res, next) => {
     if (req.body.on && manualCommandBusy) return res.status(409).json({ ok: false, error: 'Hay otra orden manual en curso.' });
     if (!req.body.on) {
       clearZoneTimer(zone.id);
+      delete runtimeState.manualAutoOff[String(zone.id)];
+      await persistRuntimeState();
       const result = await sendZoneCommand(zone, false);
       return res.json({ ok: true, zone: zone.id, code: zone.code, requested: false, commandAccepted: result.success !== false, tuya: result });
     }
@@ -367,7 +394,7 @@ app.post('/api/zones/:id/command', async (req, res, next) => {
       const otherOn = states.find(state => state.id !== zone.id && state.on);
       if (otherOn) return res.status(409).json({ ok: false, error: 'La otra zona está encendida. Apagala y confirmá el estado antes de continuar.' });
       const result = await sendZoneCommand(zone, true);
-      const autoOffAt = scheduleAutoOff(zone, minutes);
+      const autoOffAt = await scheduleAutoOff(zone, minutes);
       await recordEvent('Riego manual iniciado', zone.name + ' por ' + minutes + ' min', zone.id, true, 'manual');
       res.json({ ok: true, zone: zone.id, code: zone.code, requested: true, durationMinutes: minutes, autoOffAt, commandAccepted: result.success !== false, tuya: result, warning: 'El autoapagado del servidor no sobrevive a reinicios; confirmá el temporizador físico si está disponible.' });
     } finally { manualCommandBusy = false; }
@@ -375,6 +402,7 @@ app.post('/api/zones/:id/command', async (req, res, next) => {
 });
 
 async function schedulerTick() {
+  if (!startupReady) return;
   if (!programsReady) await loadPrograms();
   const expired = programs.filter(p => p.delayUntil && Date.parse(p.delayUntil) <= Date.now());
   if (expired.length) {
@@ -382,10 +410,10 @@ async function schedulerTick() {
     try { await persistPrograms(); await recordEvent('Retraso climático finalizado', 'La pausa venció; los próximos horarios vuelven a quedar habilitados.', null, true, 'scheduler'); }
     catch (e) { console.error('No se pudo limpiar la pausa vencida en la nube:', e.message); }
   }
-  const now = localScheduleParts();
-  const due = programs.filter(p => p.enabled && p.days.includes(now.day) && p.time === now.time && (!p.delayUntil || Date.parse(p.delayUntil) <= Date.now()));
+  const now = localScheduleParts(new Date(), TZ);
+  const due = programs.filter(p => isProgramDue(p, now, Date.now()));
   for (const p of due) {
-    const key = now.date + ' ' + p.id + ' ' + p.time;
+    const key = scheduleRunKey(p, now);
     if (firedScheduleKeys.has(key)) continue;
     firedScheduleKeys.add(key);
     if (firedScheduleKeys.size > 500) firedScheduleKeys.clear();
@@ -401,7 +429,13 @@ async function schedulerTick() {
     runSequence(runId, items).catch(e => console.error('Error de programa:', e.message));
   }
 }
-setInterval(() => schedulerTick().catch(e => console.error('Error del planificador:', e.message)), 15000);
+setInterval(async () => {
+  if (schedulerTickRunning) return;
+  schedulerTickRunning = true;
+  try { await schedulerTick(); }
+  catch (e) { console.error('Error del planificador:', e.message); }
+  finally { schedulerTickRunning = false; }
+}, 15000);
 app.use((error, _req, res, _next) => {
   res.status(Number(error.status) || 500).json({ ok: false, error: error.message || 'Error interno', ...(error.details ? { details: error.details } : {}) });
 });
@@ -413,6 +447,16 @@ app.listen(port, '0.0.0.0', () => {
       requireConfig();
       for (const zone of Object.values(zones)) { clearZoneTimer(zone.id); await sendZoneCommand(zone, false); }
       await recordEvent('Reinicio seguro', 'Se enviaron órdenes OFF a las dos zonas al iniciar el servidor.', null, true, 'startup');
+      await loadRuntimeState();
+      const interruptedRun = runtimeState.activeRun;
+      const interruptedManual = Object.values(runtimeState.manualAutoOff || {});
+      runtimeState.activeRun = null;
+      runtimeState.manualAutoOff = {};
+      await persistRuntimeState();
+      if (interruptedRun) await recordEvent('Riego interrumpido por reinicio', `${interruptedRun.zoneName || 'Zona'}: el servidor reinició durante un ciclo. Se canceló por seguridad y no se reanudó automáticamente.`, interruptedRun.zoneId || null, false, 'startup');
+      for (const item of interruptedManual) await recordEvent('Autoapagado manual interrumpido por reinicio', `${item.zoneName || 'Zona'}: el temporizador de memoria no sobrevive a reinicios; se enviaron órdenes OFF al iniciar.`, item.zoneId || null, false, 'startup');
+      startupReady = true;
+      await recordEvent('Planificador listo', 'Carga de configuración y recuperación segura completadas.', null, true, 'startup');
     } catch (e) { await recordEvent('Fallo de apagado al iniciar', e.message, null, false, 'startup'); }
   })();
 });
