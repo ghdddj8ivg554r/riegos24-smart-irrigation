@@ -47,6 +47,25 @@ async function loadPrograms() {
   programs = Array.isArray(rows?.[0]?.programs) ? rows[0].programs : [];
   programsReady = true;
 }
+async function loadRuntimeState() {
+  const response = await fetch(RUNTIME_URL + '?id=eq.main&select=state', {
+    headers: supabaseHeaders({ Accept: 'application/json' }),
+  });
+  if (!response.ok) throw new Error('No se pudo cargar el estado de ejecución (HTTP ' + response.status + ').');
+  const rows = await response.json();
+  const state = rows?.[0]?.state;
+  runtimeState = state && typeof state === 'object'
+    ? { activeRun: state.activeRun || null, manualAutoOff: state.manualAutoOff || {} }
+    : { activeRun: null, manualAutoOff: {} };
+}
+async function persistRuntimeState() {
+  const response = await fetch(RUNTIME_URL + '?on_conflict=id', {
+    method: 'POST',
+    headers: supabaseHeaders({ Prefer: 'resolution=merge-duplicates,return=minimal' }),
+    body: JSON.stringify({ id: 'main', state: runtimeState, updated_at: new Date().toISOString() }),
+  });
+  if (!response.ok) throw new Error('No se pudo guardar el estado de ejecución (HTTP ' + response.status + ').');
+}
 async function recordEvent(event, detail = '', zoneId = null, ok = true, source = 'server') {
   console.log(`[${ok ? 'OK' : 'ERROR'}] ${event}: ${detail}`);
   if (!EVENTS_URL || !SUPABASE_SERVICE_ROLE_KEY) return;
