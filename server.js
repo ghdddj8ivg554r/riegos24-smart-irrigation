@@ -373,6 +373,8 @@ app.post('/api/zones/:id/command', async (req, res, next) => {
     if (req.body.on && manualCommandBusy) return res.status(409).json({ ok: false, error: 'Hay otra orden manual en curso.' });
     if (!req.body.on) {
       clearZoneTimer(zone.id);
+      delete runtimeState.manualAutoOff[String(zone.id)];
+      await persistRuntimeState();
       const result = await sendZoneCommand(zone, false);
       return res.json({ ok: true, zone: zone.id, code: zone.code, requested: false, commandAccepted: result.success !== false, tuya: result });
     }
