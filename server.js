@@ -351,6 +351,9 @@ app.post('/api/sequence/stop', async (_req, res, next) => {
       try { await sendZoneCommand(zone, false); results.push({ zone: zone.id, ok: true }); }
       catch (e) { results.push({ zone: zone.id, ok: false, error: e.message }); }
     }
+    runtimeState.activeRun = null;
+    runtimeState.manualAutoOff = {};
+    await persistRuntimeState();
     res.json({ ok: true, stopped: true, results, warning: results.some(x => !x.ok) ? 'No se pudo enviar OFF a todas las zonas.' : undefined });
   } catch (e) { next(e); }
 });
