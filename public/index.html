@@ -695,8 +695,10 @@ async function loadRemotePrograms(){
   if(d.programs.length===0){await saveRemotePrograms();return;}
   P=d.programs.map((p,i)=>({id:Number(p.id)||i+1,name:String(p.name||('Programa '+(i+1))),ic:'💧',z:{1:Number(p.durations?.[1]||0),2:Number(p.durations?.[2]||0)},days:Array.isArray(p.days)?p.days:[],time:p.time||'07:00',on:p.enabled===true,delayUntil:p.delayUntil||null}));
   const activeDelays=P.map(p=>Date.parse(p.delayUntil||'')).filter(t=>Number.isFinite(t)&&t>Date.now());
+  const locallySavedDelayUntil=S.delayUntil;
   S.delayUntil=activeDelays.length?Math.max(...activeDelays):0;
-  S.delayH=S.delayUntil?Math.min(72,Math.max(1,Math.ceil((S.delayUntil-Date.now())/36e5))):0;
+  if(S.delayUntil)S.delayH=Math.min(72,Math.max(1,Math.ceil((S.delayUntil-Date.now())/36e5)));
+  else if(locallySavedDelayUntil&&locallySavedDelayUntil<=Date.now())S.delayH=0;
   if(!P.length)P=[];
   S.armed=P.some(p=>p.on);save();
 }
