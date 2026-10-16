@@ -563,7 +563,7 @@ case 'pt':if(p){p.on=!p.on;log(null,'Programa '+(p.on?'activado':'pausado'),p.na
 case 'pedit':MOD={k:'p',id:i};break;
 case 'zed':MOD={k:'z',id:i};break;
 case 'mclose':{if(MOD&&MOD.k==='p'){const q=P.find(x=>x.id===MOD.id);if(q)log(null,'Programa modificado',q.name,'programa','cal')}else if(MOD)log(null,'Zona configurada',zn(MOD.id),'sistema','gear');const wasProgram=MOD&&MOD.k==='p';MOD=null;if(wasProgram)saveRemotePrograms().then(()=>toast('Programa guardado en el servidor.')).catch(e=>toast('No se pudo guardar: '+e.message));else {if(online)saveRemoteConfig().then(()=>toast('Configuración guardada en el servidor.')).catch(e=>toast('No se pudo guardar la configuración: '+e.message));else toast('Cambios guardados en este dispositivo.');}break}
-case 'pnew':{const n={id:Date.now(),name:'Programa nuevo',ic:'🌱',z:{1:0,2:0},days:[1],time:'07:00',on:false};P.push(n);MOD={k:'p',id:n.id};log(null,'Programa creado',n.name,'programa','cal');break}
+case 'pnew':{const n={id:Date.now(),name:'Programa nuevo',ic:'🌱',z:{1:20,2:30},days:[1],time:'07:00',on:false};P.push(n);MOD={k:'p',id:n.id};log(null,'Programa creado',n.name,'programa','cal');break}
 case 'pdup':if(p){const n=Object.assign({},p,{id:Date.now(),name:p.name+' (copia)',z:Object.assign({},p.z),days:p.days.slice()});P.push(n);MOD={k:'p',id:n.id};log(null,'Programa duplicado',n.name,'programa','cal')}break;
 case 'prun':if(p){MOD=null;toast('Para ejecutar ahora, iniciá una secuencia desde Inicio con las duraciones deseadas.');}break;
 case 'pdel':if(p){if(delc===i){P=P.filter(x=>x!==p);delc=0;log(null,'Programa eliminado',p.name,'programa','cal')}else{delc=i;toast('Tocá otra vez para eliminar “'+p.name+'”');setTimeout(()=>{if(delc===i){delc=0;render(1)}},3000)}}break;
