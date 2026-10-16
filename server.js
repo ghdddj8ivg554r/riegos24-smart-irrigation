@@ -236,8 +236,12 @@ async function runSequence(runId, items) {
 function scheduleAutoOff(zone, minutes) {
   clearZoneTimer(zone.id);
   const timer = setTimeout(async () => {
-    try { await sendZoneCommand(zone, false); console.log(`Auto-OFF enviado a zona ${zone.id} (${zone.name})`); }
-    catch (e) { console.error(`FALLO auto-OFF zona ${zone.id}: ${e.message}`); }
+    try {
+      await sendZoneCommand(zone, false);
+      console.log(`Auto-OFF enviado a zona ${zone.id} (${zone.name})`);
+      delete runtimeState.manualAutoOff[String(zone.id)];
+      await persistRuntimeState();
+    } catch (e) { console.error(`FALLO auto-OFF zona ${zone.id}: ${e.message}`); }
     finally { autoOffTimers.delete(String(zone.id)); }
   }, minutes * 60000);
   timer.unref?.();
