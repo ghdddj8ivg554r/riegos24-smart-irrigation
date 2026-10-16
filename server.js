@@ -14,11 +14,14 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const PROGRAMS_URL = SUPABASE_URL ? SUPABASE_URL + '/rest/v1/riegos24_programs' : '';
 const EVENTS_URL = SUPABASE_URL ? SUPABASE_URL + '/rest/v1/riegos24_events' : '';
 const CONFIG_URL = SUPABASE_URL ? SUPABASE_URL + '/rest/v1/riegos24_config' : '';
+const RUNTIME_URL = SUPABASE_URL ? SUPABASE_URL + '/rest/v1/riegos24_runtime' : '';
 const RAIN_LIMIT_MM = Math.max(0, Number(process.env.WEATHER_RAIN_LIMIT_MM || 2));
 const WIND_LIMIT_KMH = Math.max(1, Number(process.env.WEATHER_WIND_LIMIT_KMH || 35));
 const TZ = process.env.SCHEDULE_TIMEZONE || 'America/Argentina/Cordoba';
 let programs = [];
 let programsReady = false;
+let runtimeState = { activeRun: null, manualAutoOff: {} };
+let schedulerTickRunning = false;
 const firedScheduleKeys = new Set();
 
 function supabaseHeaders(extra = {}) {
