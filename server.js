@@ -495,7 +495,7 @@ async function schedulerTick() {
     try { await persistPrograms(); } catch (e) { console.error('No se pudo guardar la expiración del reintento climático:', e.message); }
   }
   const now = localScheduleParts();
-  if (weatherPause.active) return;
+  if (!weatherPauseLoaded || weatherPause.active) return;
   const due = programs.filter(p => p.enabled &&
     (!p.delayUntil || Date.parse(p.delayUntil) <= nowMs) &&
     ((p.days.includes(now.day) && p.time === now.time) ||
