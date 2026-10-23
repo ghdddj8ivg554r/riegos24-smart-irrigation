@@ -43,6 +43,78 @@ async function loadPrograms() {
   programs = Array.isArray(rows?.[0]?.programs) ? rows[0].programs : [];
   programsReady = true;
 }
+const WEATHER_STATE_ID = 'weather_pause';
+let weatherPause = { active: false, reason: null, startedAt: null, checkedAt: null, safeChecks: 0 };
+let weatherPauseLoaded = false;
+let lastWeatherCheckAt = 0;
+let weatherCheckBusy = false;
+const WEATHER_RECHECK_MS = 15 * 60 * 1000;
+
+async function loadWeatherPause() {
+  const response = await fetch(CONFIG_URL + '?id=eq.' + WEATHER_STATE_ID + '&select=config', {
+    headers: supabaseHeaders({ Accept: 'application/json' }),
+  });
+  if (!response.ok) throw new Error('No se pudo cargar la pausa climática (HTTP ' + response.status + ').');
+  const rows = await response.json();
+  const saved = rows?.[0]?.config;
+  if (saved && typeof saved === 'object') {
+    weatherPause = {
+      active: saved.active === true,
+      reason: typeof saved.reason === 'string' ? saved.reason : null,
+      startedAt: saved.startedAt || null,
+      checkedAt: saved.checkedAt || null,
+      safeChecks: Number(saved.safeChecks) || 0,
+    };
+  }
+  weatherPauseLoaded = true;
+}
+async function persistWeatherPause() {
+  const response = await fetch(CONFIG_URL + '?on_conflict=id', {
+    method: 'POST',
+    headers: supabaseHeaders({ Prefer: 'resolution=merge-duplicates,return=minimal' }),
+    body: JSON.stringify({ id: WEATHER_STATE_ID, config: weatherPause, updated_at: new Date().toISOString() }),
+  });
+  if (!response.ok) throw new Error('No se pudo guardar la pausa climática (HTTP ' + response.status + ').');
+}
+async function refreshWeatherPause(nowMs) {
+  if (!weatherPauseLoaded || weatherCheckBusy || nowMs - lastWeatherCheckAt < WEATHER_RECHECK_MS) return;
+  weatherCheckBusy = true;
+  lastWeatherCheckAt = nowMs;
+  try {
+    const wx = await getWeatherSafety();
+    if (wx.blocked) {
+      const changed = !weatherPause.active || weatherPause.reason !== wx.blockReason;
+      weatherPause = {
+        active: true,
+        reason: wx.blockReason || 'condiciones meteorológicas desfavorables',
+        startedAt: weatherPause.active && weatherPause.startedAt ? weatherPause.startedAt : new Date(nowMs).toISOString(),
+        checkedAt: new Date(nowMs).toISOString(),
+        safeChecks: 0,
+      };
+      await persistWeatherPause();
+      if (changed) await recordEvent('Pausa automática por clima', 'Riegos automáticos pausados: ' + weatherPause.reason + '. Lluvia prevista 4 h: ' + wx.rainMm.toFixed(1) + ' mm; lluvia últimas 72 h: ' + wx.rainLast72hMm.toFixed(1) + ' mm; viento: ' + wx.windKmh + ' km/h.', null, true, 'weather');
+      return;
+    }
+    if (weatherPause.active) {
+      const safeChecks = (weatherPause.safeChecks || 0) + 1;
+      weatherPause = { ...weatherPause, checkedAt: new Date(nowMs).toISOString(), safeChecks };
+      if (safeChecks >= 2) {
+        const oldReason = weatherPause.reason;
+        weatherPause = { active: false, reason: null, startedAt: null, checkedAt: new Date(nowMs).toISOString(), safeChecks: 0 };
+        await persistWeatherPause();
+        await recordEvent('Pausa automática finalizada', 'Clima apto en dos controles consecutivos separados por al menos 15 minutos. Se habilitan los próximos horarios. Motivo anterior: ' + (oldReason || 'clima desfavorable') + '.', null, true, 'weather');
+      } else {
+        await persistWeatherPause();
+      }
+    }
+  } catch (e) {
+    console.error('No se pudo actualizar la pausa automática por clima:', e.message);
+    // Si falla el clima o Supabase, nunca se elimina una pausa activa.
+  } finally {
+    weatherCheckBusy = false;
+  }
+}
+
 async function recordEvent(event, detail = '', zoneId = null, ok = true, source = 'server') {
   console.log(`[${ok ? 'OK' : 'ERROR'}] ${event}: ${detail}`);
   if (!EVENTS_URL || !SUPABASE_SERVICE_ROLE_KEY) return;
@@ -71,7 +143,7 @@ async function waitForZoneOff(zoneId, attempts = 5) {
   return states;
 }
 async function getWeatherSafety() {
-  const url = 'https://api.open-meteo.com/v1/forecast?latitude=-27.33&longitude=-58.57&current=precipitation,wind_speed_10m,temperature_2m,relative_humidity_2m,cloud_cover&hourly=precipitation,temperature_2m,relative_humidity_2m,cloud_cover&past_days=3&forecast_days=2&timezone=America%2FArgentina%2FCordoba';
+  const url = 'https://api.open-meteo.com/v1/forecast?latitude=-27.33&longitude=-58.57&current=precipitation,wind_speed_10m,temperature_2m,relative_humidity_2m,cloud_cover&hourly=precipitation,temperature_2m,relative_humidity_2m,cloud_cover&past_days=3&forecast_days=2&timezone=America%2FArgentina%2FCordoba&timeformat=unixtime';
   const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
   if (!response.ok) throw new Error('Clima no disponible (HTTP ' + response.status + ')');
   const data = await response.json();
@@ -79,11 +151,11 @@ async function getWeatherSafety() {
   if (!data.current || !Array.isArray(h?.time) || !Array.isArray(h?.precipitation)) throw new Error('Pronóstico incompleto');
   const now = Date.now();
   const rainNext4h = h.time.reduce((sum, stamp, i) => {
-    const t = Date.parse(stamp);
+    const t = Number(stamp) * 1000;
     return t >= now && t < now + 4 * 3600000 ? sum + Number(h.precipitation[i] || 0) : sum;
   }, 0);
   const rainLast72h = h.time.reduce((sum, stamp, i) => {
-    const t = Date.parse(stamp);
+    const t = Number(stamp) * 1000;
     return t <= now && t > now - 72 * 3600000 ? sum + Number(h.precipitation[i] || 0) : sum;
   }, 0);
   const windKmh = Number(data.current.wind_speed_10m || 0);
@@ -252,6 +324,8 @@ app.get('/api/health', (_req, res) => res.json({
   configured: Boolean(API_ACCESS_KEY && process.env.TUYA_ACCESS_ID && process.env.TUYA_ACCESS_SECRET && deviceId),
   programsStorage: Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) ? 'supabase' : 'not_configured',
 }));
+app.get('/api/weather/pause', (_req, res) => res.json({ ok: true, loaded: weatherPauseLoaded, pause: weatherPause, recheckMinutes: WEATHER_RECHECK_MS / 60000 }));
+
 app.get('/api/zones', (_req, res) => res.json({
   zones: Object.values(zones).map(({ id, name, code }) => ({ id, name, code })),
 }));
@@ -403,6 +477,7 @@ app.post('/api/zones/:id/command', async (req, res, next) => {
 async function schedulerTick() {
   if (!programsReady) await loadPrograms();
   const nowMs = Date.now();
+  await refreshWeatherPause(nowMs);
   const expired = programs.filter(p => p.delayUntil && Date.parse(p.delayUntil) <= nowMs);
   if (expired.length) {
     expired.forEach(p => { p.delayUntil = null; });
@@ -420,6 +495,7 @@ async function schedulerTick() {
     try { await persistPrograms(); } catch (e) { console.error('No se pudo guardar la expiración del reintento climático:', e.message); }
   }
   const now = localScheduleParts();
+  if (weatherPause.active) return;
   const due = programs.filter(p => p.enabled &&
     (!p.delayUntil || Date.parse(p.delayUntil) <= nowMs) &&
     ((p.days.includes(now.day) && p.time === now.time) ||
@@ -480,6 +556,7 @@ app.use((error, _req, res, _next) => {
   res.status(Number(error.status) || 500).json({ ok: false, error: error.message || 'Error interno', ...(error.details ? { details: error.details } : {}) });
 });
 loadPrograms().catch(e => console.error('No se pudieron cargar programas al iniciar:', e.message));
+loadWeatherPause().catch(e => console.error('No se pudo cargar la pausa climática al iniciar:', e.message));
 app.listen(port, '0.0.0.0', () => {
   console.log(`Riegos24 API escuchando en puerto ${port}; zona horaria ${TZ}`);
   (async () => {
