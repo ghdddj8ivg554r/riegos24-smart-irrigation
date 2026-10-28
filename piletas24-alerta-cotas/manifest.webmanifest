@@ -1,0 +1,17 @@
+{
+  "name": "Piletas24 Alerta de Cotas",
+  "short_name": "Alerta Cotas",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f1f6f9",
+  "theme_color": "#082c45",
+  "description": "Herramienta comunitaria de elevación y prevención de inundaciones",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
