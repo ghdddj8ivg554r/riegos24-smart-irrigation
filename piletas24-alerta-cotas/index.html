@@ -14,7 +14,19 @@
  <p class="small"><b>Actualización:</b> la app no consulta automáticamente la altura del río. El dato 7,74 m corresponde a un registro anterior (27/10/2026); la fecha actual del dispositivo no significa que el dato esté actualizado. <a href="https://alerta.ina.gob.ar/" target="_blank" rel="noopener">INA</a> · <a href="https://b.prefecturanaval.gob.ar/" target="_blank" rel="noopener">Prefectura</a></p>
  </section>
  <section class="card"><h2>Resumen</h2><div class="metrics"><div class="metric"><span>Última lectura conocida · Paso de la Patria</span><div class="river-status"><div class="river-arrow" id="riverArrow" aria-label="Tendencia no verificada">?</div><div class="river-status-copy"><strong id="riverBig">7,74 m · escala local</strong><span id="riverMeta">Último dato encontrado en INA/PNA: 7,74 m el 27/10/2026; subió 0,03 m en 24 h. Es un dato fechado, no una lectura en vivo.</span><div id="riverBadge" class="river-alert">ROJO · ÚLTIMO DATO SOBRE EVACUACIÓN</div></div></div></div><div class="metric"><span>Elevación aproximada del terreno</span><strong id="elevBig">Consultando…</strong><span id="elevMeta">Calculando la ubicación inicial</span></div><div class="metric"><span>Tu terreno y el puerto local</span><strong style="font-size:1.05rem" id="riskBig">Terreno ≈ 57,66 m</strong><span id="riskMeta">La diferencia con el agua y el nivel de escala se calcula abajo como estimación provisional.</span></div></div><div class="notice danger" style="margin-top:12px"><b>Estado según el último dato encontrado (27/10/2026):</b> 7,74 m; alerta oficial 6,50 m y evacuación 7,00 m. Ese registro estaba 0,74 m sobre evacuación, pero puede haber cambiado desde entonces. Esta app aún no actualiza automáticamente. Confirmá la medición más reciente en <a href="https://alerta.ina.gob.ar/" target="_blank" rel="noopener">INA</a> o <a href="https://b.prefecturanaval.gob.ar/" target="_blank" rel="noopener">Prefectura</a>. El umbral del puerto no equivale al umbral de inundación de tu parcela.</div></section>
-<section class="card" id="riverStations"><h2>Última altura por puerto</h2><p class="muted">Alturas hidrométricas según el último registro visible de Prefectura. Los números y símbolos representan la escala de cada puerto, no la elevación del terreno.</p><div class="gauge-list"><a class="gauge-row" href="https://cauce.live/" target="_blank" rel="noopener"><span class="gauge-name">Represa Capanema <small>Brasil · río Iguazú · dato PNA</small></span><strong class="gauge-value">69,78 <small>m</small></strong><span class="gauge-trend rising" aria-label="Crece">↑</span></a><a class="gauge-row" href="https://cauce.live/" target="_blank" rel="noopener"><span class="gauge-name">Represa Itaipú <small>Brasil · río Paraná · dato PNA</small></span><strong class="gauge-value">221,22 <small>m</small></strong><span class="gauge-trend falling" aria-label="Baja">↓</span></a><a class="gauge-row" href="https://b.prefecturanaval.gob.ar/" target="_blank" rel="noopener"><span class="gauge-name">Andresito <small>Río Iguazú</small></span><strong class="gauge-value">6,12 <small>m</small></strong><span class="gauge-trend falling" aria-label="Baja">↓</span></a><a class="gauge-row" href="https://b.prefecturanaval.gob.ar/" target="_blank" rel="noopener"><span class="gauge-name">Puerto Iguazú <small>Río Iguazú</small></span><strong class="gauge-value">29,30 <small>m</small></strong><span class="gauge-trend stable" aria-label="Estable">＝</span></a><a class="gauge-row" href="https://b.prefecturanaval.gob.ar/" target="_blank" rel="noopener"><span class="gauge-name">Itatí <small>Río Paraná</small></span><strong class="gauge-value">8,20 <small>m</small></strong><span class="gauge-trend stable" aria-label="Estable">＝</span></a><a class="gauge-row" href="https://b.prefecturanaval.gob.ar/" target="_blank" rel="noopener"><span class="gauge-name">Paso de la Patria <small>Río Paraná</small></span><strong class="gauge-value">7,74 <small>m</small></strong><span class="gauge-trend stable" aria-label="Estable">＝</span></a></div><p class="small">Valores de referencia consultados en CAUCE a partir de datos de Prefectura: Capanema 69,78 m (+23,92 m/24 h) e Itaipú 221,22 m (−13,78 m/24 h). Confirmá siempre la fecha/hora de la fuente porque estos valores pueden cambiar.</p><div class="actions"><a href="https://b.prefecturanaval.gob.ar/" target="_blank" rel="noopener">Ver tablero oficial de Prefectura</a><a href="https://cauce.live/" target="_blank" rel="noopener">Ver datos y variaciones en CAUCE</a></div><div class="actions"><button id="shareRiver" type="button" class="secondary">Compartir fuentes por WhatsApp</button></div><p class="small">Los valores de las represas se completaron con la última información visible en CAUCE, que declara usar datos de Prefectura. Aún no están conectados a una actualización automática propia de esta app; las flechas reflejan la variación publicada en esa fuente y no son una predicción.</p></section>
+<section class="card" id="riverStations"><h2>Última altura por puerto</h2><p class="muted">Lecturas consultadas desde el catálogo hidrológico oficial del INA, que integra fuentes como Prefectura Naval Argentina. Cada estación conserva su propia fecha de medición.</p><div class="actions"><button id="refreshRiverStations" type="button">↻ Actualizar alturas ahora</button><span id="riverStationsStatus" class="small" role="status">Preparando consulta oficial…</span></div><div class="gauge-list" id="riverStationsList">
+<a class="gauge-row" data-station-name="Paso de la Patria" href="https://alerta.ina.gov.ar/" target="_blank" rel="noopener"><span class="gauge-name">Paso de la Patria <small>Río Paraná · INA/PNA</small></span><strong class="gauge-value">Consultando…</strong><span class="gauge-trend stable">…</span></a>
+<a class="gauge-row" data-station-name="Itatí" href="https://alerta.ina.gov.ar/" target="_blank" rel="noopener"><span class="gauge-name">Itatí <small>Río Paraná · INA/PNA</small></span><strong class="gauge-value">Consultando…</strong><span class="gauge-trend stable">…</span></a>
+<a class="gauge-row" data-station-name="Corrientes" href="https://alerta.ina.gov.ar/" target="_blank" rel="noopener"><span class="gauge-name">Corrientes <small>Río Paraná · INA/PNA</small></span><strong class="gauge-value">Consultando…</strong><span class="gauge-trend stable">…</span></a>
+<a class="gauge-row" data-station-name="Ituzaingó" href="https://alerta.ina.gov.ar/" target="_blank" rel="noopener"><span class="gauge-name">Ituzaingó <small>Río Paraná · INA/PNA</small></span><strong class="gauge-value">Consultando…</strong><span class="gauge-trend stable">…</span></a>
+<a class="gauge-row" data-station-name="Puerto Iguazú" href="https://alerta.ina.gov.ar/" target="_blank" rel="noopener"><span class="gauge-name">Puerto Iguazú <small>Río Iguazú · INA/PNA</small></span><strong class="gauge-value">Consultando…</strong><span class="gauge-trend stable">…</span></a>
+<a class="gauge-row" data-station-name="Bella Vista" href="https://alerta.ina.gov.ar/" target="_blank" rel="noopener"><span class="gauge-name">Bella Vista <small>Río Paraná · INA/PNA</small></span><strong class="gauge-value">Consultando…</strong><span class="gauge-trend stable">…</span></a>
+<a class="gauge-row" data-station-name="Goya" href="https://alerta.ina.gov.ar/" target="_blank" rel="noopener"><span class="gauge-name">Goya <small>Río Paraná · INA/PNA</small></span><strong class="gauge-value">Consultando…</strong><span class="gauge-trend stable">…</span></a>
+<a class="gauge-row" data-station-name="Esquina" href="https://alerta.ina.gov.ar/" target="_blank" rel="noopener"><span class="gauge-name">Esquina <small>Río Paraná · INA/PNA</small></span><strong class="gauge-value">Consultando…</strong><span class="gauge-trend stable">…</span></a>
+<a class="gauge-row" data-station-name="Barranqueras" href="https://alerta.ina.gov.ar/" target="_blank" rel="noopener"><span class="gauge-name">Barranqueras <small>Río Paraná · INA/PNA</small></span><strong class="gauge-value">Consultando…</strong><span class="gauge-trend stable">…</span></a>
+<a class="gauge-row" data-station-name="Empedrado" href="https://alerta.ina.gov.ar/" target="_blank" rel="noopener"><span class="gauge-name">Empedrado <small>Río Paraná · INA/PNA</small></span><strong class="gauge-value">Consultando…</strong><span class="gauge-trend stable">…</span></a>
+<a class="gauge-row" data-station-name="La Paz" href="https://alerta.ina.gov.ar/" target="_blank" rel="noopener"><span class="gauge-name">La Paz <small>Río Paraná · INA/PNA</small></span><strong class="gauge-value">Consultando…</strong><span class="gauge-trend stable">…</span></a>
+</div><p id="riverStationsUpdated" class="small">La fecha y hora válidas serán las de la lectura oficial, no la hora de apertura de esta aplicación.</p><p class="small">Si la fuente no responde, se mostrará el error y no se presentará una lectura antigua como si fuera actual. Los niveles de alerta y evacuación son los publicados por los organismos competentes.</p><div class="actions"><a href="https://alerta.ina.gov.ar/" target="_blank" rel="noopener">Abrir catálogo hidrológico oficial del INA ↗</a><a href="https://b.prefecturanaval.gob.ar/" target="_blank" rel="noopener">Tablero de Prefectura ↗</a><button id="shareRiver" type="button" class="secondary">Compartir fuentes por WhatsApp</button></div></section>
 <section class="card" id="basinFlows">
 <h2>Caudales de la cuenca del Paraná</h2>
 <p class="muted">Estaciones de referencia del informe diario del Instituto Nacional del Agua (INA). Caudal en metros cúbicos por segundo (m³/s), no altura del río en el puerto. Datos publicados el <b>28/10/2026</b>; no son telemetría en vivo.</p>
@@ -80,5 +92,65 @@ $('save').onclick=()=>{let date=$('date').value||new Date().toISOString().slice(
    refreshPanels();
    window.setInterval(refreshPanels,5*60*1000);
  }
+})();
+</script><script>
+(function(){
+ const list=document.getElementById('riverStationsList'), status=document.getElementById('riverStationsStatus'), updated=document.getElementById('riverStationsUpdated'), button=document.getElementById('refreshRiverStations');
+ if(!list||!status||!button)return;
+ const url='https://alerta.ina.gov.ar/geoserver/public2/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=public2%3Aultimas_alturas_con_timeseries&outputFormat=application%2Fjson';
+ const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+ const fmt=v=>Number(v).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
+ const parseDate=v=>{const d=new Date(v);return Number.isNaN(d.getTime())?String(v||'fecha no disponible'):d.toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Argentina/Cordoba'})};
+ async function refresh(){
+   button.disabled=true;status.textContent='Consultando datos oficiales del INA…';
+   try{
+    const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),15000);
+    let response;
+    try{response=await fetch(url,{cache:'no-store',signal:ctrl.signal,headers:{'Accept':'application/json'}})}finally{clearTimeout(timer)}
+    if(!response.ok)throw new Error('La fuente respondió HTTP '+response.status);
+    const data=await response.json(), features=Array.isArray(data.features)?data.features:[];
+    if(!features.length)throw new Error('La fuente no devolvió estaciones en formato GeoJSON');
+    const records=features.map(f=>f.properties||{}).filter(p=>p.nombre&&p.valor!==null&&p.valor!==undefined);
+    if(!records.length)throw new Error('No se reconocieron las lecturas de la respuesta oficial');
+    let found=0;
+    for(const row of list.querySelectorAll('[data-station-name]')){
+      const target=norm(row.dataset.stationName);
+      const candidates=records.filter(p=>norm(p.nombre)===target).sort((a,b)=>new Date(b.fecha||0)-new Date(a.fecha||0));
+      const rec=candidates[0], value=row.querySelector('.gauge-value'), trend=row.querySelector('.gauge-trend');
+      if(!rec){value.innerHTML='Sin lectura disponible';trend.textContent='?';trend.className='gauge-trend stable';continue}
+      found++;
+      value.innerHTML=fmt(rec.valor)+' <small>m</small>';
+      const t=norm(rec.tendencia||'');
+      if(t.includes('ascend')||t.includes('sub')){trend.textContent='↑';trend.className='gauge-trend rising';trend.setAttribute('aria-label','Subiendo')}
+      else if(t.includes('descend')||t.includes('baj')){trend.textContent='↓';trend.className='gauge-trend falling';trend.setAttribute('aria-label','Bajando')}
+      else{trend.textContent='＝';trend.className='gauge-trend stable';trend.setAttribute('aria-label','Estable')}
+      const small=row.querySelector('.gauge-name small');
+      small.textContent=(small.textContent.split(' · ')[0]||'Estación')+' · '+parseDate(rec.fecha);
+      row.title='Fuente INA · lectura: '+parseDate(rec.fecha)+' · estado: '+(rec.estado||'no informado')+' · alerta: '+(rec.nivel_de_alerta??'sin dato')+' m · evacuación: '+(rec.nivel_de_evacuacion??'sin dato')+' m';
+      if(target==='paso de la patria'){
+        const rv=document.getElementById('river'), date=document.getElementById('date'), source=document.getElementById('source');
+        const q=document.getElementById('quickRiver'), qd=document.getElementById('quickDate'), big=document.getElementById('riverBig'), meta=document.getElementById('riverMeta'), arrow=document.getElementById('riverArrow'), badge=document.getElementById('riverBadge');
+        if(q)q.textContent=fmt(rec.valor)+' m';
+        if(qd)qd.textContent='Lectura oficial: '+parseDate(rec.fecha);
+        if(big)big.textContent=fmt(rec.valor)+' m · escala local';
+        if(meta)meta.textContent='Fuente INA · '+parseDate(rec.fecha)+' · tendencia: '+(rec.tendencia||'sin dato')+'.';
+        if(rv)rv.value=rec.valor;
+        if(date&&rec.fecha){const d=new Date(rec.fecha);if(!Number.isNaN(d.getTime()))date.value=new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16)}
+        if(source)source.value='INA / red hidrométrica oficial · '+(rec.fecha||'fecha no disponible');
+        if(arrow){arrow.textContent=t.includes('ascend')||t.includes('sub')?'↑':t.includes('descend')||t.includes('baj')?'↓':'＝';arrow.setAttribute('aria-label',rec.tendencia||'Tendencia no informada')}
+        if(badge){badge.className=(norm(rec.estado).includes('evacu')?'river-alert':norm(rec.estado).includes('alert')?'river-caution':'river-badge');badge.textContent=(rec.estado||'Estado no informado').toUpperCase()+' · INA'}
+        if(typeof window.p24RefreshRiverSummary==='function')window.p24RefreshRiverSummary(Number(rec.valor),rec);
+      }
+    }
+    if(!found)throw new Error('La respuesta llegó, pero no coincidieron los nombres de las estaciones');
+    updated.textContent='Consulta completada: '+new Date().toLocaleString('es-AR')+'. Se muestran fechas originales de cada lectura; no implica que todas las estaciones midan a la misma hora.';
+    status.textContent='Fuente oficial consultada · '+found+' estación(es) con lectura.';
+   }catch(e){
+    status.textContent='No se pudo actualizar desde el INA: '+(e.name==='AbortError'?'tiempo de espera agotado':e.message)+'.';
+    updated.textContent='No se confirmó una actualización nueva. Abrí el catálogo oficial del INA para verificar las lecturas.';
+    for(const row of list.querySelectorAll('[data-station-name]')){const value=row.querySelector('.gauge-value');if(value&&value.textContent==='Consultando…')value.textContent='Sin conexión';}
+   }finally{button.disabled=false}
+ }
+ button.addEventListener('click',refresh);refresh();window.setInterval(refresh,10*60*1000);
 })();
 </script></body></html>
