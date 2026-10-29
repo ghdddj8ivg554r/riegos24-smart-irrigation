@@ -27,7 +27,7 @@
 <a class="gauge-row" data-station-name="Empedrado" href="https://alerta.ina.gov.ar/" target="_blank" rel="noopener"><span class="gauge-name">Empedrado <small>Río Paraná · INA/PNA</small></span><strong class="gauge-value">Consultando…</strong><span class="gauge-trend stable">…</span></a>
 <a class="gauge-row" data-station-name="La Paz" href="https://alerta.ina.gov.ar/" target="_blank" rel="noopener"><span class="gauge-name">La Paz <small>Río Paraná · INA/PNA</small></span><strong class="gauge-value">Consultando…</strong><span class="gauge-trend stable">…</span></a>
 </div><p id="riverStationsUpdated" class="small">La fecha y hora válidas serán las de la lectura oficial, no la hora de apertura de esta aplicación.</p><p class="small">Si la fuente no responde, se mostrará el error y no se presentará una lectura antigua como si fuera actual. Los niveles de alerta y evacuación son los publicados por los organismos competentes.</p><div class="actions"><a href="https://alerta.ina.gov.ar/" target="_blank" rel="noopener">Abrir catálogo hidrológico oficial del INA ↗</a><a href="https://b.prefecturanaval.gob.ar/" target="_blank" rel="noopener">Tablero de Prefectura ↗</a><button id="shareRiver" type="button" class="secondary">Compartir fuentes por WhatsApp</button></div></section>
-<section class="card" id="basinFlows">
+<section class="card" id="southBrazilRain"><h2>Pronóstico de lluvia río arriba · sur de Brasil</h2><p class="muted">Acumulados previstos para las próximas 72 horas y 7 días en zonas de la cuenca alta del Paraná e Iguazú. Es una señal meteorológica regional, no una predicción directa de la altura local.</p><div class="actions"><button id="refreshBrazilRain" type="button">↻ Actualizar pronóstico</button><span id="brazilRainStatus" class="small" role="status">Preparando consulta…</span></div><div class="gauge-list" id="brazilRainList"><div class="gauge-row"><span class="gauge-name">Cascavel <small>Oeste de Paraná, Brasil</small></span><strong class="gauge-value">Consultando…</strong></div><div class="gauge-row"><span class="gauge-name">Chapecó <small>Oeste de Santa Catarina, Brasil</small></span><strong class="gauge-value">Consultando…</strong></div><div class="gauge-row"><span class="gauge-name">Curitiba <small>Paraná, Brasil</small></span><strong class="gauge-value">Consultando…</strong></div></div><div id="brazilRainSummary" class="notice">La clasificación se actualizará con los acumulados del modelo.</div><p class="small">Fuente: Open-Meteo. Los umbrales de lluvia son orientativos; para alertas oficiales consultá INMET y Defesa Civil de Brasil.</p><div class="actions"><a href="https://portal.inmet.gov.br/" target="_blank" rel="noopener">INMET ↗</a><a href="https://www.gov.br/mdr/pt-br/assuntos/protecao-e-defesa-civil" target="_blank" rel="noopener">Defesa Civil ↗</a></div></section><section class="card" id="basinFlows">
 <h2>Caudales de la cuenca del Paraná</h2>
 <p class="muted">Estaciones de referencia del informe diario del Instituto Nacional del Agua (INA). Caudal en metros cúbicos por segundo (m³/s), no altura del río en el puerto. Datos publicados el <b>28/10/2026</b>; no son telemetría en vivo.</p>
 <div class="official-table-wrap" style="height:auto;min-height:0;overflow-x:auto">
@@ -74,70 +74,84 @@ $('clearHistory').onclick=()=>{if(confirm('¿Borrar las lecturas guardadas en es
 $('gps').onclick=()=>{if(!navigator.geolocation)return alert('GPS no disponible');navigator.geolocation.getCurrentPosition(p=>select(p.coords.latitude,p.coords.longitude,true),e=>alert('No se pudo obtener ubicación: '+e.message),{enableHighAccuracy:true,timeout:12000})};$('quickGps').onclick=()=>$('gps').click();$('quickMap').onclick=()=>{$('map').scrollIntoView({behavior:'smooth',block:'center'});if(map)setTimeout(()=>map.invalidateSize(),350)};$('center').onclick=()=>{select(home[0],home[1],true);if(map)map.setZoom(13)};$('coord').onclick=()=>{let a=+$('lat').value,b=+$('lon').value;if(!Number.isFinite(a)||!Number.isFinite(b)||Math.abs(a)>90||Math.abs(b)>180)return alert('Coordenadas inválidas');select(a,b,true)};function readHistory(){try{return JSON.parse(localStorage.getItem('p24levels')||'[]')}catch{return []}}
 function renderHistory(){let a=readHistory().slice(-20).reverse(),box=$('historyChart');if(!a.length){box.innerHTML='<p class="muted">Todavía no hay lecturas guardadas.</p>';return}let vals=a.map(x=>x.level),min=Math.min(...vals),max=Math.max(...vals),span=Math.max(.01,max-min);box.innerHTML=a.map(x=>'<div class="history-row"><span>'+esc(x.dateLabel)+'</span><div class="history-track"><span style="width:'+Math.max(4,((x.level-min)/span)*96+4)+'%"></span></div><span class="history-value">'+fmt(x.level)+' m</span></div>').join('')}
 function evaluateManualAlert(level,previous){let threshold=+$('alertLevel').value,rise=+$('rapidRise').value,msg=[];if(Number.isFinite(threshold)&&$('alertLevel').value!==''&&level>=threshold)msg.push('La lectura guardada alcanzó el umbral personal de '+fmt(threshold)+' m.');if(Number.isFinite(rise)&&$('rapidRise').value!==''&&previous!==null&&level-previous>=rise)msg.push('La lectura guardada subió '+fmt(level-previous)+' m respecto de la lectura guardada anterior.');if(msg.length){$('alertStatus').textContent=msg.join(' ');$('alertStatus').className='notice warning';if('Notification'in window&&Notification.permission==='granted')new Notification('Piletas24 · aviso de lectura guardada',{body:msg.join(' ')})}else{$('alertStatus').textContent='Lectura guardada. No se activó ningún umbral personal con estos datos.';$('alertStatus').className='notice'}}
-$('save').onclick=()=>{let date=$('date').value||new Date().toISOString().slice(0,16),level=+$('river').value;localStorage.setItem('p24river',JSON.stringify({level,date,source:$('source').value,zero:+$('zero').value,datum:$('datum').value}));let a=readHistory(),prev=a.length?a[a.length-1].level:null;a.push({level,dateLabel:date.replace('T',' '),source:$('source').value,stamp:Date.now()});localStorage.setItem('p24levels',JSON.stringify(a.slice(-100)));river();renderHistory();evaluateManualAlert(level,prev);alert('Lectura guardada en este dispositivo. Confirmá que la fecha y la fuente sean correctas.')};$('reset').onclick=()=>{localStorage.removeItem('p24river');$('river').value=7.74;$('date').value='2026-10-27T20:00';$('source').value='Dato de referencia previo; verificar con fuente oficial';$('zero').value=47.86;$('datum').value='unverified';river()};['river','date','zero','datum'].forEach(id=>$(id).addEventListener('change',river));$('calc').onclick=calc;$('report').onclick=()=>{let a=rs();a.push({type:$('type').value,depth:$('depth').value,note:$('note').value,coords:point.map(n=>n.toFixed(5)).join(', '),date:new Date().toLocaleString('es-AR')});localStorage.setItem('p24reports',JSON.stringify(a));$('note').value='';$('depth').value='';render()};$('export').onclick=()=>{let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(rs(),null,2)],{type:'application/json'}));a.download='piletas24-reportes.json';a.click();URL.revokeObjectURL(a.href)};$('exportAll').onclick=()=>{const data={exportedAt:new Date().toISOString(),notice:'Los niveles son datos ingresados manualmente; no son lecturas automáticas ni alertas oficiales.',river:localStorage.getItem('p24river'),levels:localStorage.getItem('p24levels'),zones:localStorage.getItem('p24zones'),reports:localStorage.getItem('p24reports')};const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.download='piletas24-respaldo-completo.json';a.click();URL.revokeObjectURL(a.href)};init();load();calc();renderHistory();renderZones();elevation();if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{})})();
-</script><script>
+$('save').onclick=()=>{let date=$('date').value||new Date().toISOString().slice(0,16),level=+$('river').value;localStorage.setItem('p24river',JSON.stringify({level,date,source:$('source').value,zero:+$('zero').value,datum:$('datum').value}));let a=readHistory(),prev=a.length?a[a.length-1].level:null;a.push({level,dateLabel:date.replace('T',' '),source:$('source').value,stamp:Date.now()});localStorage.setItem('p24levels',JSON.stringify(a.slice(-100)));river();renderHistory();evaluateManualAlert(level,prev);alert('Lectura guardada en este dispositivo. Confirmá que la fecha y la fuente sean correctas.')};$('reset').onclick=()=>{localStorage.removeItem('p24river');$('river').value=7.74;$('date').value='2026-10-27T20:00';$('source').value='Dato de referencia previo; verificar con fuente oficial';$('zero').value=47.86;$('datum').value='unverified';river()};['river','date','zero','datum'].forEach(id=>$(id).addEventListener('change',river));$('calc').onclick=calc;$('report').onclick=()=>{let a=rs();a.push({type:$('type').value,depth:$('depth').value,note:$('note').value,coords:point.map(n=>n.toFixed(5)).join(', '),date:new Date().toLocaleString('es-AR')});localStorage.setItem('p24reports',JSON.stringify(a));$('note').value='';$('depth').value='';render()};$('export').onclick=()=>{let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(rs(),null,2)],{type:'application/json'}));a.download='piletas24-reportes.json';a.click();URL.revokeObjectURL(a.href)};$('exportAll').onclick=()=>{const data={exportedAt:new Date().toISOString(),notice:'Los niveles son datos ingresados manualmente; no son lectu<script>
 (function(){
- const frames=Array.from(document.querySelectorAll('#riverStations iframe[data-station]'));
- const stamp=document.getElementById('riverPanelsUpdated');
- function refreshPanels(){
-   const now=new Date();
-   frames.forEach(frame=>{
-     const base='https://alerta.ina.gob.ar/pub/mapa?unid='+encodeURIComponent(frame.dataset.station);
-     frame.src=base+'&_refresh='+Date.now();
+ const list=document.getElementById('riverStationsList');
+ const status=document.getElementById('riverStationsStatus');
+ const updated=document.getElementById('riverStationsUpdated');
+ const button=document.getElementById('refreshRiverStations');
+ const norm=function(v){return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim()};
+ const fmt=function(v){return Number(v).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})};
+ const dateLabel=function(v){const d=new Date(v);return Number.isNaN(d.getTime())?String(v||'fecha no disponible'):d.toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Argentina/Cordoba'})};
+ async function refreshStations(){
+  if(!list||!status||!button)return;
+  button.disabled=true;status.textContent='Consultando catálogo hidrológico del INA…';
+  try{
+   const controller=new AbortController(),timer=setTimeout(function(){controller.abort()},15000);
+   let response;
+   try{response=await fetch('https://alerta.ina.gov.ar/geoserver/public2/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=public2%3Aultimas_alturas_con_timeseries&outputFormat=application%2Fjson',{cache:'no-store',signal:controller.signal,headers:{Accept:'application/json'}})}finally{clearTimeout(timer)}
+   if(!response.ok)throw Error('respuesta HTTP '+response.status);
+   const json=await response.json(),features=Array.isArray(json.features)?json.features:[];
+   if(!features.length)throw Error('la fuente no devolvió estaciones');
+   const records=features.map(function(f){return f.properties||{}}).filter(function(p){return p.nombre&&p.valor!==null&&p.valor!==undefined});
+   if(!records.length)throw Error('la respuesta no contiene lecturas reconocibles');
+   let count=0;
+   Array.from(list.querySelectorAll('[data-station-name]')).forEach(function(row){
+    const aliases=[row.dataset.stationName].concat((row.dataset.aliases||'').split(';')).map(norm);
+    const rec=records.filter(function(p){return aliases.includes(norm(p.nombre))}).sort(function(a,b){return new Date(b.fecha||0)-new Date(a.fecha||0)})[0];
+    const value=row.querySelector('.gauge-value'),trend=row.querySelector('.gauge-trend');
+    if(!rec){value.textContent='Sin coincidencia en INA';if(trend){trend.textContent='?';trend.className='gauge-trend stable'}return}
+    count++;value.innerHTML=fmt(rec.valor)+' <small>m</small>';
+    const t=norm(rec.tendencia||'');
+    if(trend){trend.textContent=(t.includes('crec')||t.includes('ascend')||t.includes('sub'))?'↑':(t.includes('baj')||t.includes('descend'))?'↓':'＝';trend.className='gauge-trend '+(trend.textContent==='↑'?'rising':trend.textContent==='↓'?'falling':'stable')}
+    const small=row.querySelector('.gauge-name small');if(small)small.textContent=small.textContent.split(' · ')[0]+' · '+dateLabel(rec.fecha);
+    row.title='Lectura INA: '+dateLabel(rec.fecha)+'; tendencia: '+(rec.tendencia||'no informada')+'; alerta: '+(rec.nivel_de_alerta==null?'s/d':rec.nivel_de_alerta)+' m; evacuación: '+(rec.nivel_de_evacuacion==null?'s/d':rec.nivel_de_evacuacion)+' m';
+    if(norm(row.dataset.stationName)==='paso de la patria'){
+     const q=document.getElementById('quickRiver'),qd=document.getElementById('quickDate'),big=document.getElementById('riverBig'),meta=document.getElementById('riverMeta'),rv=document.getElementById('river'),date=document.getElementById('date'),source=document.getElementById('source'),arrow=document.getElementById('riverArrow'),badge=document.getElementById('riverBadge');
+     if(q)q.textContent=fmt(rec.valor)+' m';if(qd)qd.textContent='Lectura oficial: '+dateLabel(rec.fecha);if(big)big.textContent=fmt(rec.valor)+' m · escala local';if(meta)meta.textContent='INA · '+dateLabel(rec.fecha)+' · '+(rec.tendencia||'tendencia no informada');if(rv)rv.value=rec.valor;if(source)source.value='INA · lectura '+(rec.fecha||'fecha no disponible');
+     if(date&&rec.fecha){const d=new Date(rec.fecha);if(!Number.isNaN(d.getTime()))date.value=new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16)}
+     if(arrow){arrow.textContent=(t.includes('crec')||t.includes('ascend')||t.includes('sub'))?'↑':(t.includes('baj')||t.includes('descend'))?'↓':'＝';arrow.setAttribute('aria-label',rec.tendencia||'Tendencia no informada')}
+     if(badge){badge.className=norm(rec.estado).includes('evacu')?'river-alert':norm(rec.estado).includes('alert')?'river-caution':'river-badge';badge.textContent=(rec.estado||'Estado no informado').toUpperCase()+' · INA'}
+    }
    });
-   if(stamp) stamp.textContent='Paneles oficiales recargados en esta app: '+now.toLocaleString('es-AR')+'. La hora de lectura válida es la que figura dentro de cada ficha INA.';
+   if(!count)throw Error('no coincidieron los nombres de las estaciones');
+   status.textContent='Consulta completada: '+count+' estaciones con lectura coincidente.';
+   updated.textContent='Consulta '+new Date().toLocaleString('es-AR')+'. La fecha válida de cada dato es la indicada en su fila.';
+  }catch(e){
+   status.textContent='No se pudo actualizar desde el INA: '+(e.name==='AbortError'?'tiempo de espera agotado':e.message)+'.';
+   updated.textContent='No se confirmó una actualización nueva; no uses datos antiguos como actuales.';
+   Array.from(list.querySelectorAll('[data-station-name]')).forEach(function(row){const v=row.querySelector('.gauge-value');if(v&&v.textContent==='Consultando…')v.textContent='Sin conexión'});
+  }finally{button.disabled=false}
  }
- if(frames.length){
-   frames.forEach(frame=>frame.addEventListener('error',()=>{ if(stamp) stamp.textContent='No se pudo cargar una ficha dentro de la app. Usá el enlace “Abrir ficha INA” de esa estación.'; }));
-   refreshPanels();
-   window.setInterval(refreshPanels,5*60*1000);
+ if(button){button.addEventListener('click',refreshStations);refreshStations();setInterval(refreshStations,10*60*1000)}
+ const rainButton=document.getElementById('refreshBrazilRain'),rainStatus=document.getElementById('brazilRainStatus'),rainList=document.getElementById('brazilRainList'),rainSummary=document.getElementById('brazilRainSummary');
+ const places=[{name:'Cascavel',city:'Oeste de Paraná, Brasil',lat:-24.9555,lon:-53.4552},{name:'Chapecó',city:'Oeste de Santa Catarina, Brasil',lat:-27.1004,lon:-52.6152},{name:'Curitiba',city:'Paraná, Brasil',lat:-25.4284,lon:-49.2733}];
+ async function refreshRain(){
+  if(!rainButton||!rainList||!rainStatus)return;
+  rainButton.disabled=true;rainStatus.textContent='Consultando pronóstico meteorológico…';
+  try{
+   const results=[];
+   for(let i=0;i<places.length;i++){
+    const p=places[i],url='https://api.open-meteo.com/v1/forecast?latitude='+p.lat+'&longitude='+p.lon+'&daily=precipitation_sum&forecast_days=7&timezone=America%2FSao_Paulo';
+    const controller=new AbortController(),timer=setTimeout(function(){controller.abort()},12000);let response;
+    try{response=await fetch(url,{cache:'no-store',signal:controller.signal})}finally{clearTimeout(timer)}
+    if(!response.ok)throw Error('pronóstico HTTP '+response.status);
+    const j=await response.json(),vals=j.daily&&j.daily.precipitation_sum;
+    if(!Array.isArray(vals))throw Error('sin acumulados diarios');
+    const first3=vals.slice(0,3).reduce(function(a,b){return a+(Number(b)||0)},0),week=vals.reduce(function(a,b){return a+(Number(b)||0)},0);
+    results.push({p:p,first3:first3,week:week});
+    const row=rainList.children[i];if(row){const strong=row.querySelector('.gauge-value'),small=row.querySelector('small');if(strong)strong.innerHTML=fmt(first3)+' <small>mm / 3 días</small>';if(small)small.textContent=p.city+' · 7 días: '+fmt(week)+' mm'}
+   }
+   const mean3=results.reduce(function(a,r){return a+r.first3},0)/results.length,mean7=results.reduce(function(a,r){return a+r.week},0)/results.length;
+   const level=(mean3>=80||mean7>=150)?'ELEVADA':(mean3>=40||mean7>=80)?'MODERADA':'NO ELEVADA según estos acumulados';
+   rainSummary.innerHTML='<b>Señal regional: '+level+'</b><br>Promedio de las zonas consultadas: '+fmt(mean3)+' mm en 3 días y '+fmt(mean7)+' mm en 7 días. Clasificación orientativa, no alerta oficial ni pronóstico de altura del río.';
+   rainStatus.textContent='Pronóstico consultado '+new Date().toLocaleString('es-AR')+'.';
+  }catch(e){rainStatus.textContent='No se pudo consultar la lluvia: '+(e.name==='AbortError'?'tiempo de espera agotado':e.message)+'.';rainSummary.textContent='No se pudo determinar si la lluvia será elevada. Consultá INMET y Defesa Civil.'}
+  finally{rainButton.disabled=false}
  }
+ if(rainButton){rainButton.addEventListener('click',refreshRain);refreshRain();setInterval(refreshRain,60*60*1000)}
 })();
-</script><script>
-(function(){
- const list=document.getElementById('riverStationsList'), status=document.getElementById('riverStationsStatus'), updated=document.getElementById('riverStationsUpdated'), button=document.getElementById('refreshRiverStations');
- if(!list||!status||!button)return;
- const url='https://alerta.ina.gov.ar/geoserver/public2/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=public2%3Aultimas_alturas_con_timeseries&outputFormat=application%2Fjson';
- const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
- const fmt=v=>Number(v).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
- const parseDate=v=>{const d=new Date(v);return Number.isNaN(d.getTime())?String(v||'fecha no disponible'):d.toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Argentina/Cordoba'})};
- async function refresh(){
-   button.disabled=true;status.textContent='Consultando datos oficiales del INA…';
-   try{
-    const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),15000);
-    let response;
-    try{response=await fetch(url,{cache:'no-store',signal:ctrl.signal,headers:{'Accept':'application/json'}})}finally{clearTimeout(timer)}
-    if(!response.ok)throw new Error('La fuente respondió HTTP '+response.status);
-    const data=await response.json(), features=Array.isArray(data.features)?data.features:[];
-    if(!features.length)throw new Error('La fuente no devolvió estaciones en formato GeoJSON');
-    const records=features.map(f=>f.properties||{}).filter(p=>p.nombre&&p.valor!==null&&p.valor!==undefined);
-    if(!records.length)throw new Error('No se reconocieron las lecturas de la respuesta oficial');
-    let found=0;
-    for(const row of list.querySelectorAll('[data-station-name]')){
-      const target=norm(row.dataset.stationName);
-      const candidates=records.filter(p=>norm(p.nombre)===target).sort((a,b)=>new Date(b.fecha||0)-new Date(a.fecha||0));
-      const rec=candidates[0], value=row.querySelector('.gauge-value'), trend=row.querySelector('.gauge-trend');
-      if(!rec){value.innerHTML='Sin lectura disponible';trend.textContent='?';trend.className='gauge-trend stable';continue}
-      found++;
-      value.innerHTML=fmt(rec.valor)+' <small>m</small>';
-      const t=norm(rec.tendencia||'');
-      if(t.includes('ascend')||t.includes('sub')){trend.textContent='↑';trend.className='gauge-trend rising';trend.setAttribute('aria-label','Subiendo')}
-      else if(t.includes('descend')||t.includes('baj')){trend.textContent='↓';trend.className='gauge-trend falling';trend.setAttribute('aria-label','Bajando')}
-      else{trend.textContent='＝';trend.className='gauge-trend stable';trend.setAttribute('aria-label','Estable')}
-      const small=row.querySelector('.gauge-name small');
-      small.textContent=(small.textContent.split(' · ')[0]||'Estación')+' · '+parseDate(rec.fecha);
-      row.title='Fuente INA · lectura: '+parseDate(rec.fecha)+' · estado: '+(rec.estado||'no informado')+' · alerta: '+(rec.nivel_de_alerta??'sin dato')+' m · evacuación: '+(rec.nivel_de_evacuacion??'sin dato')+' m';
-      if(target==='paso de la patria'){
-        const rv=document.getElementById('river'), date=document.getElementById('date'), source=document.getElementById('source');
-        const q=document.getElementById('quickRiver'), qd=document.getElementById('quickDate'), big=document.getElementById('riverBig'), meta=document.getElementById('riverMeta'), arrow=document.getElementById('riverArrow'), badge=document.getElementById('riverBadge');
-        if(q)q.textContent=fmt(rec.valor)+' m';
-        if(qd)qd.textContent='Lectura oficial: '+parseDate(rec.fecha);
-        if(big)big.textContent=fmt(rec.valor)+' m · escala local';
-        if(meta)meta.textContent='Fuente INA · '+parseDate(rec.fecha)+' · tendencia: '+(rec.tendencia||'sin dato')+'.';
-        if(rv)rv.value=rec.valor;
-        if(date&&rec.fecha){const d=new Date(rec.fecha);if(!Number.isNaN(d.getTime()))date.value=new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16)}
-        if(source)source.value='INA / red hidrométrica oficial · '+(rec.fecha||'fecha no disponible');
-        if(arrow){arrow.textContent=t.includes('ascend')||t.includes('sub')?'↑':t.includes('descend')||t.includes('baj')?'↓':'＝';arrow.setAttribute('aria-label',rec.tendencia||'Tendencia no informada')}
+</script>cend')||t.includes('sub')?'↑':t.includes('descend')||t.includes('baj')?'↓':'＝';arrow.setAttribute('aria-label',rec.tendencia||'Tendencia no informada')}
         if(badge){badge.className=(norm(rec.estado).includes('evacu')?'river-alert':norm(rec.estado).includes('alert')?'river-caution':'river-badge');badge.textContent=(rec.estado||'Estado no informado').toUpperCase()+' · INA'}
         if(typeof window.p24RefreshRiverSummary==='function')window.p24RefreshRiverSummary(Number(rec.valor),rec);
       }
