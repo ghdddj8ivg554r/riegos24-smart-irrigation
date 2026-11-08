@@ -673,7 +673,7 @@ async function checkConn(){
   if(!/^https:\/\/[^\s]+$/i.test(u)){conn={st:'err',msg:'Ingresá una URL HTTPS válida.'};return render(1)}
   conn={st:'wait',msg:'Comprobando API, controlador y datos guardados…'};render(1);
   try{
-    const health=await fetch(u+'/api/health',{cache:'no-store',signal:AbortSignal.timeout(10000)});
+    const health=await fetch(u+'/api/health',{cache:'no-store',signal:AbortSignal.timeout(90000)});
     const h=await health.json();
     if(!health.ok||!h.ok)throw new Error('La API no respondió correctamente.');
     await refreshRealStatus(false);
@@ -731,7 +731,7 @@ async function loadRemoteHistory(){
 async function fetchRealWeather(){
   try{
     const url='https://api.open-meteo.com/v1/forecast?latitude=-27.33&longitude=-58.57&current=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m&hourly=precipitation,precipitation_probability,temperature_2m&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=7&timezone=America%2FArgentina%2FCordoba';
-    const res=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(10000)});
+    const res=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(90000)});
     if(!res.ok)throw new Error('HTTP '+res.status);
     const d=await res.json(),c=d.current,day=d.daily;
     if(!c||!day)throw new Error('Pronóstico incompleto');
