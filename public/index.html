@@ -731,7 +731,7 @@ async function loadRemoteHistory(){
 async function fetchRealWeather(){
   try{
     const url='https://api.open-meteo.com/v1/forecast?latitude=-27.33&longitude=-58.57&current=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m&hourly=precipitation,precipitation_probability,temperature_2m&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=7&timezone=America%2FArgentina%2FCordoba';
-    const res=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(90000)});
+    const res=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(10000)});
     if(!res.ok)throw new Error('HTTP '+res.status);
     const d=await res.json(),c=d.current,day=d.daily;
     if(!c||!day)throw new Error('Pronóstico incompleto');
