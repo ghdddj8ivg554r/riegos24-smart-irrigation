@@ -358,13 +358,14 @@ app.get('/api/client/installations/:id/overview', r24RequireUser, async(req,res,
       const membership=await r24Db('r24_installation_members','installation_id=eq.'+id+'&user_id=eq.'+encodeURIComponent(req.r24User.id)+'&select=id&limit=1');
       if(!membership.length) return res.status(403).json({ok:false,error:'No tenés acceso a esta instalación.'});
     }
-    const [devices,zones,programs,events]=await Promise.all([
+    const [devices,zones,programs,events,runtime]=await Promise.all([
       r24Db('r24_devices','installation_id=eq.'+id+'&select=*&order=created_at.asc'),
       r24Db('r24_zones','installation_id=eq.'+id+'&select=*&order=sort_order.asc'),
       r24Db('r24_programs','installation_id=eq.'+id+'&select=*&order=created_at.desc'),
-      r24Db('r24_events','installation_id=eq.'+id+'&select=*&order=created_at.desc&limit=50')
+      r24Db('r24_events','installation_id=eq.'+id+'&select=*&order=created_at.desc&limit=50'),
+      r24Db('r24_runtime','installation_id=eq.'+id+'&select=state,updated_at&limit=1')
     ]);
-    res.json({ok:true,devices,zones,programs,events});
+    res.json({ok:true,devices,zones,programs,events,runtime:runtime[0]||null});
   }catch(e){next(e);}
 });
 
