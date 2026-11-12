@@ -191,15 +191,181 @@ const zones = {
 };
 const autoOffTimers = new Map();
 
-app.use(cors({ origin: true, methods: ['GET', 'POST', 'PUT', 'OPTIONS'], allowedHeaders: ['Content-Type', 'x-api-key'] }));
+app.use(cors({ origin: true, methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], allowedHeaders: ['Content-Type', 'x-api-key', 'Authorization'] }));
 app.use(express.json({ limit: '32kb' }));
 app.use(express.static('public'));
 app.use((req, res, next) => {
-  if (req.path === '/api/health' || req.method === 'OPTIONS') return next();
+  if (req.path === '/api/health' || req.method === 'OPTIONS' ||
+      req.path.startsWith('/api/auth/') || req.path.startsWith('/api/admin/') ||
+      req.path.startsWith('/api/client/')) return next();
   if (!API_ACCESS_KEY || req.headers['x-api-key'] !== API_ACCESS_KEY) {
     return res.status(401).json({ ok: false, error: 'No autorizado' });
   }
   next();
+});
+
+
+// ---- Riegos24 multi-tenant API (server-side service-role only) ----
+const R24_ADMIN_EMAIL = (process.env.R24_BOOTSTRAP_ADMIN_EMAIL || 'rodriguez-alfredo@hotmail.com').trim().toLowerCase();
+const r24Rest = (table, query = '') => SUPABASE_URL + '/rest/v1/' + table + (query ? '?' + query : '');
+function r24Headers(extra = {}) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    const e = new Error('La autenticación multiusuario no está configurada en el servidor.');
+    e.status = 503; throw e;
+  }
+  return { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: 'Bearer ' + SUPABASE_SERVICE_ROLE_KEY,
+    'Content-Type': 'application/json', ...extra };
+}
+async function r24Db(table, query = '', options = {}) {
+  const response = await fetch(r24Rest(table, query), {
+    method: options.method || 'GET', headers: r24Headers(options.headers || {}),
+    ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {})
+  });
+  const raw = await response.text();
+  if (!response.ok) {
+    const e = new Error('Error de base de datos (' + response.status + ').');
+    e.status = response.status >= 500 ? 502 : 400; e.details = raw.slice(0, 500); throw e;
+  }
+  return raw ? JSON.parse(raw) : [];
+}
+async function r24AuthUser(token) {
+  if (!token || !SUPABASE_URL) { const e = new Error('Sesión no válida.'); e.status = 401; throw e; }
+  const response = await fetch(SUPABASE_URL + '/auth/v1/user', {
+    headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: 'Bearer ' + token }
+  });
+  if (!response.ok) { const e = new Error('Sesión vencida o inválida.'); e.status = 401; throw e; }
+  return response.json();
+}
+async function r24RequireUser(req, res, next) {
+  try {
+    const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    req.r24User = await r24AuthUser(token);
+    const roles = await r24Db('r24_user_roles', 'user_id=eq.' + encodeURIComponent(req.r24User.id) + '&select=role');
+    req.r24Role = roles[0]?.role || 'customer';
+    next();
+  } catch (e) { next(e); }
+}
+function r24RequireTechnician(req, res, next) {
+  if (req.r24Role !== 'technician') return res.status(403).json({ ok: false, error: 'Se requiere permiso de técnico.' });
+  next();
+}
+app.post('/api/auth/login', async (req, res, next) => {
+  try {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return res.status(503).json({ ok:false, error:'Autenticación no configurada.' });
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const password = String(req.body?.password || '');
+    if (!email || !password) return res.status(400).json({ ok:false, error:'Ingresá email y contraseña.' });
+    const response = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=password', {
+      method:'POST', headers:{ apikey:SUPABASE_SERVICE_ROLE_KEY, 'Content-Type':'application/json' },
+      body:JSON.stringify({ email, password })
+    });
+    const data = await response.json();
+    if (!response.ok) return res.status(401).json({ ok:false, error:'Email o contraseña incorrectos.' });
+    res.json({ ok:true, access_token:data.access_token, refresh_token:data.refresh_token, expires_in:data.expires_in, user:{ id:data.user.id, email:data.user.email } });
+  } catch(e) { next(e); }
+});
+app.get('/api/auth/me', r24RequireUser, (req,res) => res.json({
+  ok:true, user:{ id:req.r24User.id, email:req.r24User.email }, role:req.r24Role
+}));
+app.post('/api/auth/bootstrap-technician', r24RequireUser, async (req,res,next) => {
+  try {
+    if (String(req.r24User.email || '').toLowerCase() !== R24_ADMIN_EMAIL) return res.status(403).json({ok:false,error:'Este correo no está autorizado para el alta inicial.'});
+    const existing = await r24Db('r24_user_roles','role=eq.technician&select=user_id&limit=1');
+    if (existing.length && existing[0].user_id !== req.r24User.id) return res.status(409).json({ok:false,error:'El técnico principal ya fue configurado.'});
+    await r24Db('r24_user_roles','on_conflict=user_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:{user_id:req.r24User.id,role:'technician'}});
+    res.json({ok:true,role:'technician'});
+  } catch(e){next(e);}
+});
+app.post('/api/admin/invitations', r24RequireUser, r24RequireTechnician, async (req,res,next) => {
+  try {
+    const email=String(req.body?.email||'').trim().toLowerCase();
+    const installationId=String(req.body?.installation_id||'');
+    const memberRole=['owner','operator','viewer'].includes(req.body?.role)?req.body.role:'owner';
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ok:false,error:'Email inválido.'});
+    const sites=await r24Db('r24_installations','id=eq.'+encodeURIComponent(installationId)+'&select=id&limit=1');
+    if(!sites.length) return res.status(404).json({ok:false,error:'Instalación no encontrada.'});
+    const invite=await fetch(SUPABASE_URL+'/auth/v1/invite',{
+      method:'POST',headers:r24Headers(),body:JSON.stringify({email, data:{}})
+    });
+    const invited=await invite.json();
+    if(!invite.ok) return res.status(invite.status===422?409:502).json({ok:false,error:'No se pudo enviar la invitación. Verificá si el usuario ya existe y la configuración de correo.'});
+    const userId=invited.id || invited.user?.id;
+    if(!userId) return res.status(502).json({ok:false,error:'La invitación no devolvió el identificador del usuario.'});
+    await r24Db('r24_user_roles','on_conflict=user_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:{user_id:userId,role:'customer'}});
+    await r24Db('r24_installation_members','on_conflict=installation_id,user_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:{installation_id:installationId,user_id:userId,role:memberRole}});
+    res.status(201).json({ok:true,email,user_id:userId,installation_id:installationId,role:memberRole});
+  }catch(e){next(e);}
+});
+app.get('/api/admin/installations', r24RequireUser, r24RequireTechnician, async (_req,res,next)=>{
+  try{
+    const rows=await r24Db('r24_installations','select=*&order=created_at.desc');
+    res.json({ok:true,installations:rows});
+  }catch(e){next(e);}
+});
+app.post('/api/admin/installations', r24RequireUser, r24RequireTechnician, async(req,res,next)=>{
+  try{
+    const name=String(req.body?.name||'').trim();
+    if(name.length<2) return res.status(400).json({ok:false,error:'Ingresá un nombre de instalación.'});
+    const rows=await r24Db('r24_installations','select=*',{method:'POST',headers:{Prefer:'return=representation'},body:{
+      name:name.slice(0,100),location:String(req.body?.location||'').trim().slice(0,180)||null,
+      timezone:'America/Argentina/Cordoba',created_by:req.r24User.id
+    }});
+    res.status(201).json({ok:true,installation:rows[0]});
+  }catch(e){next(e);}
+});
+app.get('/api/client/installations', r24RequireUser, async(req,res,next)=>{
+  try{
+    const memberships=await r24Db('r24_installation_members','user_id=eq.'+encodeURIComponent(req.r24User.id)+'&select=installation_id,role');
+    const ids=memberships.map(m=>m.installation_id);
+    if(req.r24Role==='technician') return res.json({ok:true,installations:await r24Db('r24_installations','select=*&order=created_at.desc')});
+    if(!ids.length) return res.json({ok:true,installations:[]});
+    const rows=await r24Db('r24_installations','id=in.('+ids.join(',')+')&select=*&order=created_at.desc');
+    res.json({ok:true,installations:rows.map(site=>({...site,membership_role:memberships.find(m=>m.installation_id===site.id)?.role||'viewer'}))});
+  }catch(e){next(e);}
+});
+app.post('/api/admin/installations/:id/devices', r24RequireUser, r24RequireTechnician, async(req,res,next)=>{
+  try{
+    const installationId=req.params.id;
+    const externalId=String(req.body?.external_device_id||'').trim();
+    const label=String(req.body?.label||'').trim();
+    if(!externalId||!label) return res.status(400).json({ok:false,error:'Completá Device ID y nombre del equipo.'});
+    const rows=await r24Db('r24_devices','select=*',{method:'POST',headers:{Prefer:'return=representation'},body:{
+      installation_id:installationId,provider:'tuya',external_device_id:externalId,label:label.slice(0,100),
+      region:String(req.body?.region||'us').slice(0,8)
+    }});
+    res.status(201).json({ok:true,device:rows[0]});
+  }catch(e){next(e);}
+});
+app.post('/api/admin/devices/:id/zones', r24RequireUser, r24RequireTechnician, async(req,res,next)=>{
+  try{
+    const deviceIdParam=req.params.id;
+    const channel=String(req.body?.channel_code||'').trim();
+    const name=String(req.body?.name||'').trim();
+    if(!channel||!name) return res.status(400).json({ok:false,error:'Completá canal y nombre de zona.'});
+    const devices=await r24Db('r24_devices','id=eq.'+encodeURIComponent(deviceIdParam)+'&select=installation_id');
+    if(!devices.length) return res.status(404).json({ok:false,error:'Dispositivo no encontrado.'});
+    const rows=await r24Db('r24_zones','select=*',{method:'POST',headers:{Prefer:'return=representation'},body:{
+      installation_id:devices[0].installation_id,device_id:deviceIdParam,channel_code:channel,name:name.slice(0,100),
+      sort_order:Math.max(0,Number(req.body?.sort_order)||0)
+    }});
+    res.status(201).json({ok:true,zone:rows[0]});
+  }catch(e){next(e);}
+});
+app.get('/api/client/installations/:id/overview', r24RequireUser, async(req,res,next)=>{
+  try{
+    const id=encodeURIComponent(req.params.id);
+    if(req.r24Role!=='technician'){
+      const membership=await r24Db('r24_installation_members','installation_id=eq.'+id+'&user_id=eq.'+encodeURIComponent(req.r24User.id)+'&select=id&limit=1');
+      if(!membership.length) return res.status(403).json({ok:false,error:'No tenés acceso a esta instalación.'});
+    }
+    const [devices,zones,programs,events]=await Promise.all([
+      r24Db('r24_devices','installation_id=eq.'+id+'&select=*&order=created_at.asc'),
+      r24Db('r24_zones','installation_id=eq.'+id+'&select=*&order=sort_order.asc'),
+      r24Db('r24_programs','installation_id=eq.'+id+'&select=*&order=created_at.desc'),
+      r24Db('r24_events','installation_id=eq.'+id+'&select=*&order=created_at.desc&limit=50')
+    ]);
+    res.json({ok:true,devices,zones,programs,events});
+  }catch(e){next(e);}
 });
 
 function requireConfig() {
